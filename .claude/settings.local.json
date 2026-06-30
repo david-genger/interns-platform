@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__dcce4b91-6f1f-4dbb-9888-f6403ab97bf4__list_tables_for_base",
+      "Bash(npm --version)",
+      "Bash(npx --yes create-next-app@latest . --ts --tailwind --app --src-dir --eslint --no-import-alias --use-npm --skip-install --yes)"
+    ]
+  }
+}

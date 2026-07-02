@@ -5,7 +5,12 @@
       "Bash(npm --version)",
       "Bash(npx --yes create-next-app@latest . --ts --tailwind --app --src-dir --eslint --no-import-alias --use-npm --skip-install --yes)",
       "Bash(npm install *)",
-      "Bash(node -e \"console.log\\(require\\('next/package.json'\\).version\\)\")"
+      "Bash(node -e \"console.log\\(require\\('next/package.json'\\).version\\)\")",
+      "Bash(awk -F= '/^NEXT_PUBLIC_SUPABASE_URL/||/^NEXT_PUBLIC_SUPABASE_ANON_KEY/{k=$1; v=$2; gsub\\(/[ \\\\t]/,\"\",v\\); print k\": \"\\(length\\(v\\)>0?\"set \\(\"length\\(v\\)\" chars\\)\":\"EMPTY\"\\)\"}' .env.local)",
+      "Bash(grep -oiE 'Kade Regular[^}]{0,220}' devx.html)",
+      "Bash(grep -oiE 'Halyard Micro Medium[^}]{0,220}' devx.html)",
+      "Bash(npm run *)",
+      "Bash(python3 -)"
     ]
   }
 }

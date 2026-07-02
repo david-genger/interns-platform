@@ -6,7 +6,7 @@ import { useCallback, useTransition } from "react";
 type Facets = {
   technologies: string[];
   internYears: string[];
-  experienceLevels: string[];
+  schools: string[];
 };
 
 export function Filters({ facets }: { facets: Facets }) {
@@ -27,15 +27,15 @@ export function Filters({ facets }: { facets: Facets }) {
   );
 
   const val = (k: string) => params.get(k) ?? "";
-  const anyActive = ["q", "tech", "internYear", "experienceLevel", "institutionType", "minRating"].some(
-    (k) => params.get(k)
+  const anyActive = ["q", "tech", "internYear", "school"].some((k) =>
+    params.get(k)
   );
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input
         type="search"
-        placeholder="Search name, role, school…"
+        placeholder="Search by name…"
         defaultValue={val("q")}
         onChange={(e) => setParam("q", e.target.value)}
         className="h-9 w-56 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
@@ -57,31 +57,12 @@ export function Filters({ facets }: { facets: Facets }) {
         ))}
       </Select>
 
-      <Select
-        value={val("experienceLevel")}
-        onChange={(v) => setParam("experienceLevel", v)}
-        placeholder="Any level"
-      >
-        {facets.experienceLevels.map((l) => (
-          <option key={l} value={l}>
-            {l}
+      <Select value={val("school")} onChange={(v) => setParam("school", v)} placeholder="All schools">
+        {facets.schools.map((s) => (
+          <option key={s} value={s}>
+            {s}
           </option>
         ))}
-      </Select>
-
-      <Select
-        value={val("institutionType")}
-        onChange={(v) => setParam("institutionType", v)}
-        placeholder="College or bootcamp"
-      >
-        <option value="college">College</option>
-        <option value="bootcamp">Bootcamp</option>
-      </Select>
-
-      <Select value={val("minRating")} onChange={(v) => setParam("minRating", v)} placeholder="Any rating">
-        <option value="3">3★ and up</option>
-        <option value="4">4★ and up</option>
-        <option value="5">5★ only</option>
       </Select>
 
       {anyActive && (

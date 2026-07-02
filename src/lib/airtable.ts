@@ -24,7 +24,6 @@ export const FIELD = {
   resumeSummary: "fldl7SGGiVzYbF16m",
   technologies: "fld9CnOnlBsrJ22zk", // Name (from Technologies)
   techCategories: "fldWxizhVWquoBYjQ", // Tech categories (lookup)
-  experienceLevel: "fldAz9MZ0OGAOujIp",
   internYear: "fldtU4VcPltGPMFDK",
   expectedGraduation: "fldFdJRHHzH9RLfOW",
   educationalInstitution: "fldxKfWt3zuCVFHa8",
@@ -33,13 +32,6 @@ export const FIELD = {
   state: "fldWhzrHOuNeWFLAM",
   country: "fldB7deycLNWbF9Ze",
   remotePreference: "fldErauQK53ZY0tvR",
-  ratingTotal: "fldzfOOkTijrsws0e",
-  ratingTechnical: "fldXG42f0gL7snRvj",
-  ratingSoft: "fldwUvQY4yGl9YARu",
-  ratingFrontend: "fld2OcDnkPJaxPA5i",
-  ratingBackend: "fldLFl042DTsdFTy6",
-  ratingDb: "fldl9B6GKTEIyUwqb",
-  ratingCloud: "fldIQPd0WNGu2yy6p",
   profileImage: "fldSOm8fyGYbKzlcK",
   resume: "fld2fSGjnNefUqnqx", // full Resume attachment
   lastModified: "fldqqlX3UYoabjuHr",
@@ -56,41 +48,6 @@ export type AirtableRecord = {
   id: string;
   fields: Record<string, unknown>;
 };
-
-/** Bootcamp signals used to derive institution_type from a school name. */
-const BOOTCAMP_HINTS = [
-  "bootcamp",
-  "boot camp",
-  "academy",
-  "general assembly",
-  "hack reactor",
-  "flatiron",
-  "app academy",
-  "lambda",
-  "springboard",
-  "codesmith",
-  "fullstack",
-  "full stack",
-  "nucamp",
-  "tech elevator",
-  "coding dojo",
-  "le wagon",
-  "ironhack",
-  "galvanize",
-  "thinkful",
-  "bloomtech",
-  "careerfoundry",
-  "100devs",
-];
-
-export function deriveInstitutionType(
-  institution: string | null
-): "college" | "bootcamp" | null {
-  if (!institution) return null;
-  const v = institution.toLowerCase();
-  if (BOOTCAMP_HINTS.some((h) => v.includes(h))) return "bootcamp";
-  return "college";
-}
 
 function str(v: unknown): string | null {
   if (v == null) return null;
@@ -109,12 +66,6 @@ function strArray(v: unknown): string[] {
   );
 }
 
-function num(v: unknown): number | null {
-  if (typeof v === "number") return v;
-  if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
-  return null;
-}
-
 function firstAttachment(v: unknown): AirtableAttachment | null {
   if (Array.isArray(v) && v.length > 0) return v[0] as AirtableAttachment;
   return null;
@@ -123,7 +74,6 @@ function firstAttachment(v: unknown): AirtableAttachment | null {
 /** Map an Airtable record (fields keyed by field ID) to an interns-table row. */
 export function mapRecord(rec: AirtableRecord) {
   const f = rec.fields;
-  const institution = str(f[FIELD.educationalInstitution]);
   return {
     row: {
       airtable_id: rec.id,
@@ -134,23 +84,14 @@ export function mapRecord(rec: AirtableRecord) {
       summary: str(f[FIELD.candidateSummary]) ?? str(f[FIELD.resumeSummary]),
       technologies: strArray(f[FIELD.technologies]),
       tech_categories: strArray(f[FIELD.techCategories]),
-      experience_level: str(f[FIELD.experienceLevel]),
       intern_year: str(f[FIELD.internYear]),
       expected_graduation: str(f[FIELD.expectedGraduation]),
-      educational_institution: institution,
-      institution_type: deriveInstitutionType(institution),
+      educational_institution: str(f[FIELD.educationalInstitution]),
       location: str(f[FIELD.location]),
       city: str(f[FIELD.city]),
       state: str(f[FIELD.state]),
       country: str(f[FIELD.country]),
       remote_preference: str(f[FIELD.remotePreference]),
-      rating_total: num(f[FIELD.ratingTotal]),
-      rating_technical: num(f[FIELD.ratingTechnical]),
-      rating_soft: num(f[FIELD.ratingSoft]),
-      rating_frontend: num(f[FIELD.ratingFrontend]),
-      rating_backend: num(f[FIELD.ratingBackend]),
-      rating_db: num(f[FIELD.ratingDb]),
-      rating_cloud: num(f[FIELD.ratingCloud]),
       airtable_modified_at: str(f[FIELD.lastModified]),
     },
     // Attachments handled separately (re-hosted to Storage).

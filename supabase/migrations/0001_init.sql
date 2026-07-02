@@ -44,23 +44,14 @@ create table if not exists public.interns (
   summary                  text,            -- Candidate summary / resume summary
   technologies             text[] not null default '{}',
   tech_categories          text[] not null default '{}',
-  experience_level         text,
   intern_year              text,            -- cohort
   expected_graduation      date,
-  educational_institution  text,
-  institution_type         text,            -- derived: 'college' | 'bootcamp' | null
+  educational_institution  text,            -- college / bootcamp name
   location                 text,
   city                     text,
   state                    text,
   country                  text,
   remote_preference        text,
-  rating_total             numeric,
-  rating_technical         numeric,
-  rating_soft              numeric,
-  rating_frontend          numeric,
-  rating_backend           numeric,
-  rating_db                numeric,
-  rating_cloud             numeric,
   profile_image_url        text,            -- Supabase Storage public URL
   resume_path              text,            -- Supabase Storage object path (private bucket)
   airtable_modified_at     timestamptz,
@@ -68,7 +59,7 @@ create table if not exists public.interns (
 );
 
 create index if not exists interns_intern_year_idx on public.interns (intern_year);
-create index if not exists interns_grad_idx on public.interns (expected_graduation);
+create index if not exists interns_school_idx on public.interns (educational_institution);
 create index if not exists interns_technologies_idx on public.interns using gin (technologies);
 
 -- ------------------------------------------------------------------

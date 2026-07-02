@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Intern, InternFilters } from "@/lib/types";
 
 const COLUMNS =
-  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, experience_level, intern_year, expected_graduation, educational_institution, institution_type, location, city, state, country, remote_preference, rating_total, rating_technical, rating_soft, rating_frontend, rating_backend, rating_db, rating_cloud, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
+  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
 
 /** List interns for the logged-in (approved) user. RLS enforces access. */
 export async function getInterns(filters: InternFilters): Promise<Intern[]> {
@@ -11,22 +11,14 @@ export async function getInterns(filters: InternFilters): Promise<Intern[]> {
   let query = supabase
     .from("interns")
     .select(COLUMNS)
-    .order("rating_total", { ascending: false, nullsFirst: false })
+    .order("name", { ascending: true })
     .limit(200);
 
-  if (filters.q) {
-    const q = `%${filters.q}%`;
-    query = query.or(
-      `name.ilike.${q},headline.ilike.${q},educational_institution.ilike.${q}`
-    );
-  }
+  // Search is name-only.
+  if (filters.q) query = query.ilike("name", `%${filters.q}%`);
   if (filters.tech) query = query.contains("technologies", [filters.tech]);
   if (filters.internYear) query = query.eq("intern_year", filters.internYear);
-  if (filters.experienceLevel)
-    query = query.eq("experience_level", filters.experienceLevel);
-  if (filters.institutionType)
-    query = query.eq("institution_type", filters.institutionType);
-  if (filters.minRating) query = query.gte("rating_total", filters.minRating);
+  if (filters.school) query = query.eq("educational_institution", filters.school);
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -48,21 +40,22 @@ export async function getFacets() {
   const supabase = createClient();
   const { data } = await supabase
     .from("interns")
-    .select("technologies, intern_year, experience_level")
+    .select("technologies, intern_year, educational_institution")
     .limit(1000);
 
   const tech = new Set<string>();
   const years = new Set<string>();
-  const levels = new Set<string>();
+  const schools = new Set<string>();
   for (const row of data ?? []) {
     (row.technologies as string[] | null)?.forEach((t) => tech.add(t));
     if (row.intern_year) years.add(row.intern_year as string);
-    if (row.experience_level) levels.add(row.experience_level as string);
+    if (row.educational_institution)
+      schools.add(row.educational_institution as string);
   }
   return {
     technologies: [...tech].sort(),
     internYears: [...years].sort().reverse(),
-    experienceLevels: [...levels].sort(),
+    schools: [...schools].sort(),
   };
 }
 

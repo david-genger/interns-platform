@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { DevxLogo } from "@/components/Logo";
 import { useState } from "react";
 
 export default function LoginPage() {
@@ -43,68 +44,104 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-xl font-semibold">Devx Interns</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Sign in to browse vetted interns. Access is limited to approved
-          companies.
+    <main className="grid min-h-screen lg:grid-cols-2">
+      {/* Brand panel */}
+      <section className="relative hidden overflow-hidden bg-brand-ink lg:flex lg:flex-col lg:justify-between lg:p-12">
+        {/* gradient wash */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-90"
+          style={{
+            background:
+              "radial-gradient(120% 90% at 85% 10%, rgba(102,55,237,0.55) 0%, rgba(28,117,188,0.35) 40%, rgba(11,11,20,0) 70%), radial-gradient(90% 70% at 10% 100%, rgba(106,215,229,0.20) 0%, rgba(11,11,20,0) 60%)",
+          }}
+        />
+        <div className="relative">
+          <DevxLogo height={30} priority />
+        </div>
+        <div className="relative">
+          <h2 className="max-w-md text-3xl font-semibold leading-tight text-white">
+            Experience the Exceptional.
+          </h2>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-slate-300">
+            Browse the current and future software superstars — hand-vetted by
+            Devx and ready to join your team.
+          </p>
+        </div>
+        <p className="relative text-xs text-slate-400">
+          © {new Date().getFullYear()} Devx Staffing. All rights reserved.
         </p>
+      </section>
 
-        {sent ? (
-          <div className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-            <p className="font-medium">Check your email</p>
-            <p className="mt-1 text-emerald-700">
-              We sent a sign-in link to{" "}
-              <span className="font-medium">{email}</span>. Open it on this
-              device to continue.
-            </p>
-            <button
-              onClick={() => setSent(false)}
-              className="mt-3 text-xs font-medium text-emerald-800 underline"
-            >
-              Use a different email
-            </button>
+      {/* Auth panel */}
+      <section className="flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm">
+          {/* logo shows on small screens where the brand panel is hidden */}
+          <div className="mb-8 lg:hidden">
+            <DevxLogo height={26} priority />
           </div>
-        ) : (
-          <>
-            <button
-              onClick={signInGoogle}
-              disabled={googleLoading}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-            >
-              <GoogleIcon />
-              {googleLoading ? "Redirecting…" : "Continue with Google"}
-            </button>
 
-            <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              or
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Sign In to the Intern Portal
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Access is limited to approved companies.
+          </p>
 
-            <form onSubmit={sendMagicLink} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-              />
+          {sent ? (
+            <div className="mt-8 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
+              <p className="font-medium">Check your email</p>
+              <p className="mt-1 text-emerald-700">
+                We sent a sign-in link to{" "}
+                <span className="font-medium">{email}</span>. Open it on this
+                device to continue.
+              </p>
               <button
-                type="submit"
-                disabled={emailLoading || !email.trim()}
-                className="flex h-10 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-60"
+                onClick={() => setSent(false)}
+                className="mt-3 text-xs font-medium text-emerald-800 underline"
               >
-                {emailLoading ? "Sending…" : "Email me a sign-in link"}
+                Use a different email
               </button>
-            </form>
-          </>
-        )}
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={signInGoogle}
+                disabled={googleLoading}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                <GoogleIcon />
+                {googleLoading ? "Redirecting…" : "Continue with Google"}
+              </button>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-      </div>
+              <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
+                <span className="h-px flex-1 bg-slate-200" />
+                or
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <form onSubmit={sendMagicLink} className="space-y-3">
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30"
+                />
+                <button
+                  type="submit"
+                  disabled={emailLoading}
+                  className="flex h-11 w-full items-center justify-center rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+                >
+                  {emailLoading ? "Sending…" : "Email me a sign-in link"}
+                </button>
+              </form>
+            </>
+          )}
+
+          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        </div>
+      </section>
     </main>
   );
 }

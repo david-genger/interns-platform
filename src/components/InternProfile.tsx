@@ -2,20 +2,10 @@ import type { Intern } from "@/lib/types";
 import {
   Avatar,
   Pill,
-  Stars,
   displayName,
   gradLabel,
   locationLabel,
 } from "@/components/ui";
-
-const SKILL_RATINGS: { label: string; key: keyof Intern }[] = [
-  { label: "Technical", key: "rating_technical" },
-  { label: "Soft skills", key: "rating_soft" },
-  { label: "Frontend", key: "rating_frontend" },
-  { label: "Backend", key: "rating_backend" },
-  { label: "Database", key: "rating_db" },
-  { label: "Cloud", key: "rating_cloud" },
-];
 
 export function InternProfile({ intern }: { intern: Intern }) {
   const loc = locationLabel(intern);
@@ -34,29 +24,18 @@ export function InternProfile({ intern }: { intern: Intern }) {
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {intern.intern_year && <Pill>Intern {intern.intern_year}</Pill>}
-            {intern.experience_level && <Pill>{intern.experience_level}</Pill>}
             {intern.remote_preference && <Pill>{intern.remote_preference}</Pill>}
           </div>
         </div>
       </header>
 
       <dl className="grid grid-cols-2 gap-4 text-sm">
-        <Field label="Overall rating">
-          <Stars value={intern.rating_total} />
+        <Field label="School">{intern.educational_institution ?? "—"}</Field>
+        <Field label="Expected graduation">{grad ?? "—"}</Field>
+        <Field label="Cohort">
+          {intern.intern_year ? `Intern ${intern.intern_year}` : "—"}
         </Field>
         <Field label="Location">{loc ?? "—"}</Field>
-        <Field label="School">{intern.educational_institution ?? "—"}</Field>
-        <Field label="Program">
-          {intern.institution_type ? (
-            <span className="capitalize">{intern.institution_type}</span>
-          ) : (
-            "—"
-          )}
-        </Field>
-        <Field label="Expected graduation">{grad ?? "—"}</Field>
-        <Field label="Experience level">
-          {intern.experience_level ?? "—"}
-        </Field>
       </dl>
 
       {intern.summary && (
@@ -82,20 +61,6 @@ export function InternProfile({ intern }: { intern: Intern }) {
           </div>
         </section>
       )}
-
-      <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Ratings
-        </h3>
-        <div className="grid grid-cols-2 gap-y-2 gap-x-6 text-sm">
-          {SKILL_RATINGS.map(({ label, key }) => (
-            <div key={label} className="flex items-center justify-between">
-              <span className="text-slate-600">{label}</span>
-              <Stars value={intern[key] as number | null} />
-            </div>
-          ))}
-        </div>
-      </section>
 
       {intern.resume_path && (
         <a

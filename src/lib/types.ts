@@ -8,23 +8,14 @@ export type Intern = {
   summary: string | null;
   technologies: string[];
   tech_categories: string[];
-  experience_level: string | null;
   intern_year: string | null;
   expected_graduation: string | null;
   educational_institution: string | null;
-  institution_type: string | null;
   location: string | null;
   city: string | null;
   state: string | null;
   country: string | null;
   remote_preference: string | null;
-  rating_total: number | null;
-  rating_technical: number | null;
-  rating_soft: number | null;
-  rating_frontend: number | null;
-  rating_backend: number | null;
-  rating_db: number | null;
-  rating_cloud: number | null;
   profile_image_url: string | null;
   resume_path: string | null;
   airtable_modified_at: string | null;
@@ -35,7 +26,7 @@ export type InternFilters = {
   q?: string;
   tech?: string;
   internYear?: string;
-  experienceLevel?: string;
-  institutionType?: string;
-  minRating?: number;
+  school?: string;
 };
+
+export type ViewMode = "grid" | "list";

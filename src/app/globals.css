@@ -7,5 +7,22 @@
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}
+
+@layer base {
+  /* Headings use the Devx brand display face (Halyard). Body/UI stays
+     on the neutral system sans so the interface isn't over-branded. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  /* Devx gradient wordmark for text set as "dev" + "x" accents */
+  .brand-text-gradient {
+    @apply bg-brand-gradient bg-clip-text text-transparent;
+  }
 }

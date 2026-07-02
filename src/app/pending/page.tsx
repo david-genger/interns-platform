@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { DevxLogo } from "@/components/Logo";
 
 export default async function PendingPage() {
   const supabase = createClient();
@@ -9,7 +10,10 @@ export default async function PendingPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-xl font-semibold">Access pending</h1>
+        <div className="mb-6 flex justify-center">
+          <DevxLogo height={24} />
+        </div>
+        <h1 className="text-xl font-semibold">Access Pending</h1>
         <p className="mt-2 text-sm text-slate-500">
           {user?.email ? (
             <>

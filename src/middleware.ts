@@ -64,6 +64,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and the sync API.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/sync).*)"],
+  // Run on everything except Next internals, the sync API, and static
+  // asset files (images, icons, fonts) served from /public.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api/sync|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf)$).*)",
+  ],
 };

@@ -56,14 +56,7 @@ export default function LoginPage() {
           }}
         />
         <div className="relative">
-          {/* Full lockup has dark "staffing" text, illegible on this dark
-              panel — use the mark with a light-colored suffix instead. */}
-          <DevxLogo
-            height={30}
-            priority
-            suffix="Staffing"
-            suffixClassName="font-display font-semibold text-white/90"
-          />
+          <DevxLogo height={40} theme="dark" priority />
         </div>
         <div className="relative">
           <h2 className="max-w-md text-3xl font-semibold leading-tight text-white">
@@ -84,7 +77,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* logo shows on small screens where the brand panel is hidden */}
           <div className="mb-8 lg:hidden">
-            <DevxLogo height={30} variant="full" priority />
+            <DevxLogo height={36} priority />
           </div>
 
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

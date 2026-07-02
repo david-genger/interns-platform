@@ -1,60 +1,47 @@
 import Image from "next/image";
 
-type LogoVariant = "mark" | "full";
-
-// Intrinsic dimensions of each asset, used to preserve aspect ratio.
-const ASSET: Record<LogoVariant, { src: string; width: number; height: number }> = {
-  mark: { src: "/devx-logo.png", width: 1479, height: 560 }, // "devx" lettering only
-  full: { src: "/logo-regular.png", width: 1450, height: 795 }, // official "devx staffing" lockup
-};
+// The official "devx staffing" lockup. Two color treatments, same artwork:
+//   light  -> dark "staffing" text, for light backgrounds
+//   dark   -> white "staffing" text, for dark backgrounds
+const LOCKUP = {
+  light: "/logo-regular.png",
+  dark: "/logo-white.png",
+  width: 1450,
+  height: 795,
+} as const;
 
 /**
- * Devx logo. `variant="full"` renders the official "devx staffing" lockup
- * as-is. `variant="mark"` (default) renders just the "devx" lettering, with
- * an optional text `suffix` appended (e.g. "Interns" for the app header) —
- * use this only for product/app names, not to reconstruct the brand name.
+ * Devx "devx staffing" logo. Pass `theme="dark"` on dark backgrounds so the
+ * "staffing" text stays legible. Height controls size; width is derived from
+ * the artwork's aspect ratio so it never crops or distorts.
  */
 export function DevxLogo({
-  height = 28,
-  variant = "mark",
+  height = 32,
+  theme = "light",
   className,
   priority,
-  suffix,
-  suffixClassName = "font-display font-semibold text-slate-500",
 }: {
   height?: number;
-  variant?: LogoVariant;
+  theme?: "light" | "dark";
   className?: string;
   priority?: boolean;
-  suffix?: string | null;
-  suffixClassName?: string;
 }) {
-  const asset = ASSET[variant];
-  const width = Math.round((height * asset.width) / asset.height);
+  const width = Math.round((height * LOCKUP.width) / LOCKUP.height);
   return (
-    <span className={`inline-flex items-center gap-[0.4em] ${className ?? ""}`}>
-      <Image
-        src={asset.src}
-        alt="Devx Staffing"
-        width={width}
-        height={height}
-        priority={priority}
-        unoptimized
-        style={{ height, width: "auto" }}
-      />
-      {suffix && (
-        <span
-          className={suffixClassName}
-          style={{ fontSize: Math.round(height * 0.46), lineHeight: 1 }}
-        >
-          {suffix}
-        </span>
-      )}
-    </span>
+    <Image
+      src={theme === "dark" ? LOCKUP.dark : LOCKUP.light}
+      alt="Devx Staffing"
+      width={width}
+      height={height}
+      priority={priority}
+      unoptimized
+      className={className}
+      style={{ height, width: "auto" }}
+    />
   );
 }
 
-/** Devx "x" logomark only — good for tight spaces / avatars. */
+/** Devx "x" logomark only — for tight spaces / avatars. */
 export function DevxMark({
   size = 32,
   className,

@@ -1,21 +1,36 @@
 import Image from "next/image";
 
-/** Full Devx wordmark (blue → purple gradient). */
+// The official "devx staffing" lockup. Two color treatments, same artwork:
+//   light  -> dark "staffing" text, for light backgrounds
+//   dark   -> white "staffing" text, for dark backgrounds
+const LOCKUP = {
+  light: "/logo-regular.png",
+  dark: "/logo-white.png",
+  width: 1450,
+  height: 795,
+} as const;
+
+/**
+ * Devx "devx staffing" logo. Pass `theme="dark"` on dark backgrounds so the
+ * "staffing" text stays legible. Height controls size; width is derived from
+ * the artwork's aspect ratio so it never crops or distorts.
+ */
 export function DevxLogo({
-  height = 28,
+  height = 32,
+  theme = "light",
   className,
   priority,
 }: {
   height?: number;
+  theme?: "light" | "dark";
   className?: string;
   priority?: boolean;
 }) {
-  // Wordmark asset is 1479 × 560 (devx lettering with a little padding).
-  const width = Math.round((height * 1479) / 560);
+  const width = Math.round((height * LOCKUP.width) / LOCKUP.height);
   return (
     <Image
-      src="/devx-logo.png"
-      alt="Devx"
+      src={theme === "dark" ? LOCKUP.dark : LOCKUP.light}
+      alt="Devx Staffing"
       width={width}
       height={height}
       priority={priority}
@@ -26,7 +41,7 @@ export function DevxLogo({
   );
 }
 
-/** Devx "x" logomark only — good for tight spaces / avatars. */
+/** Devx "x" logomark only — for tight spaces / avatars. */
 export function DevxMark({
   size = 32,
   className,

@@ -15,6 +15,7 @@ export default async function InternsPage({
     tech: searchParams.tech,
     internYear: searchParams.internYear,
     school: searchParams.school,
+    location: searchParams.location,
   };
 
   const [interns, facets] = await Promise.all([getInterns(filters), getFacets()]);

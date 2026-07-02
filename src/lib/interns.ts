@@ -19,6 +19,7 @@ export async function getInterns(filters: InternFilters): Promise<Intern[]> {
   if (filters.tech) query = query.contains("technologies", [filters.tech]);
   if (filters.internYear) query = query.eq("intern_year", filters.internYear);
   if (filters.school) query = query.eq("educational_institution", filters.school);
+  if (filters.location) query = query.eq("location", filters.location);
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -40,22 +41,25 @@ export async function getFacets() {
   const supabase = createClient();
   const { data } = await supabase
     .from("interns")
-    .select("technologies, intern_year, educational_institution")
+    .select("technologies, intern_year, educational_institution, location")
     .limit(1000);
 
   const tech = new Set<string>();
   const years = new Set<string>();
   const schools = new Set<string>();
+  const locations = new Set<string>();
   for (const row of data ?? []) {
     (row.technologies as string[] | null)?.forEach((t) => tech.add(t));
     if (row.intern_year) years.add(row.intern_year as string);
     if (row.educational_institution)
       schools.add(row.educational_institution as string);
+    if (row.location) locations.add(row.location as string);
   }
   return {
     technologies: [...tech].sort(),
     internYears: [...years].sort().reverse(),
     schools: [...schools].sort(),
+    locations: [...locations].sort(),
   };
 }
 

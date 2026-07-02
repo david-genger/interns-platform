@@ -6,6 +6,18 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
 const PUBLIC_PATHS = ["/login", "/pending", "/auth"];
 
 export async function middleware(request: NextRequest) {
+  // Fail with a clear message instead of an unhandled Supabase exception
+  // when .env.local hasn't been filled in yet (see README setup steps).
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return new NextResponse(
+      "Supabase isn't configured yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see README.md), then restart the dev server.",
+      { status: 500, headers: { "content-type": "text/plain" } }
+    );
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

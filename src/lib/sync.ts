@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  fetchAllInternIds,
   fetchInterns,
   mapRecord,
   type AirtableAttachment,
@@ -17,6 +18,7 @@ export type SyncResult = {
   mode: SyncMode;
   scanned: number;
   upserted: number;
+  pruned: number;
   errors: string[];
   ms: number;
 };
@@ -109,10 +111,29 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
     }
   }
 
+  // Reconcile: delete interns whose Intern Year was cleared in Airtable (they
+  // fall out of the current-intern set). Cheap — the set is small.
+  let pruned = 0;
+  try {
+    const currentIds = await fetchAllInternIds();
+    const { data: existingRows } = await admin.from("interns").select("airtable_id");
+    const stale = (existingRows ?? [])
+      .map((r) => r.airtable_id as string)
+      .filter((id) => !currentIds.has(id));
+    if (stale.length) {
+      const { error } = await admin.from("interns").delete().in("airtable_id", stale);
+      if (error) throw new Error(error.message);
+      pruned = stale.length;
+    }
+  } catch (e) {
+    errors.push(`reconcile: ${(e as Error).message}`);
+  }
+
   return {
     mode,
     scanned: records.length,
     upserted,
+    pruned,
     errors,
     ms: Date.now() - start,
   };

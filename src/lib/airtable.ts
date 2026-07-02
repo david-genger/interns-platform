@@ -101,6 +101,37 @@ export function mapRecord(rec: AirtableRecord) {
 }
 
 /**
+ * Fetch the record IDs of ALL current interns (Intern Year set), no time
+ * window. Requests a single field so the payload stays tiny — the intern
+ * universe is small (dozens), unlike the full base. Used to prune rows whose
+ * Intern Year was cleared (they fall out of this set and get deleted).
+ */
+export async function fetchAllInternIds(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let offset: string | undefined;
+
+  do {
+    const url = new URL(`https://api.airtable.com/v0/${BASE}/${TABLE}`);
+    url.searchParams.set("filterByFormula", "{Intern Year}");
+    url.searchParams.set("pageSize", "100");
+    url.searchParams.set("returnFieldsByFieldId", "true");
+    url.searchParams.append("fields[]", FIELD.internYear);
+    if (offset) url.searchParams.set("offset", offset);
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as { records: AirtableRecord[]; offset?: string };
+    for (const r of data.records) ids.add(r.id);
+    offset = data.offset;
+  } while (offset);
+
+  return ids;
+}
+
+/**
  * Fetch intern records modified within the last `hours`, paginating until done.
  * Only requests the mapped fields. Used by both sync tiers (different windows).
  */

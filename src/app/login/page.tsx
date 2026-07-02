@@ -56,7 +56,7 @@ export default function LoginPage() {
           }}
         />
         <div className="relative">
-          <DevxLogo height={30} priority />
+          <DevxLogo height={40} theme="dark" priority />
         </div>
         <div className="relative">
           <h2 className="max-w-md text-3xl font-semibold leading-tight text-white">
@@ -77,7 +77,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* logo shows on small screens where the brand panel is hidden */}
           <div className="mb-8 lg:hidden">
-            <DevxLogo height={26} priority />
+            <DevxLogo height={36} priority />
           </div>
 
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

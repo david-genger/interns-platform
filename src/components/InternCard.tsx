@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Intern } from "@/lib/types";
-import { Avatar, Pill, displayName } from "@/components/ui";
+import { Avatar, Pill, PinIcon, displayName, locationLabel } from "@/components/ui";
 
 export function InternCard({ intern }: { intern: Intern }) {
+  const loc = locationLabel(intern);
   return (
     <Link
       href={`/interns/${intern.id}`}
@@ -17,6 +18,12 @@ export function InternCard({ intern }: { intern: Intern }) {
           </h3>
           {intern.headline && (
             <p className="truncate text-sm text-slate-500">{intern.headline}</p>
+          )}
+          {loc && (
+            <p className="mt-0.5 flex items-center gap-1 text-sm text-slate-500">
+              <PinIcon />
+              <span className="truncate">{loc}</span>
+            </p>
           )}
         </div>
       </div>

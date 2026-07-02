@@ -2,10 +2,12 @@ import type { Intern } from "@/lib/types";
 import {
   Avatar,
   Pill,
+  PinIcon,
   displayName,
   gradLabel,
   locationLabel,
 } from "@/components/ui";
+import { ResumeViewer } from "@/components/ResumeViewer";
 
 export function InternProfile({ intern }: { intern: Intern }) {
   const loc = locationLabel(intern);
@@ -21,6 +23,12 @@ export function InternProfile({ intern }: { intern: Intern }) {
           </h2>
           {intern.headline && (
             <p className="text-sm text-slate-600">{intern.headline}</p>
+          )}
+          {loc && (
+            <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
+              <PinIcon />
+              <span>{loc}</span>
+            </p>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {intern.intern_year && <Pill>Intern {intern.intern_year}</Pill>}
@@ -62,16 +70,7 @@ export function InternProfile({ intern }: { intern: Intern }) {
         </section>
       )}
 
-      {intern.resume_path && (
-        <a
-          href={`/interns/${intern.id}/resume`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-dark"
-        >
-          View resume
-        </a>
-      )}
+      {intern.resume_path && <ResumeViewer internId={intern.id} />}
     </div>
   );
 }

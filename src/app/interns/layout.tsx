@@ -13,10 +13,7 @@ export default function InternsLayout({
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link href="/interns" className="flex items-center gap-2" aria-label="Devx Interns — home">
-            <DevxLogo height={22} priority />
-            <span className="hidden text-sm font-medium text-slate-400 sm:inline">
-              Interns
-            </span>
+            <DevxLogo height={22} priority suffix="Interns" />
           </Link>
           <form action="/auth/signout" method="post">
             <button className="text-sm font-medium text-slate-500 hover:text-slate-800">

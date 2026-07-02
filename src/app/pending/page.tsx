@@ -11,7 +11,7 @@ export default async function PendingPage() {
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
         <div className="mb-6 flex justify-center">
-          <DevxLogo height={24} />
+          <DevxLogo height={28} variant="full" />
         </div>
         <h1 className="text-xl font-semibold">Access Pending</h1>
         <p className="mt-2 text-sm text-slate-500">

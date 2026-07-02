@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Intern } from "@/lib/types";
-import { Avatar, displayName } from "@/components/ui";
+import { Avatar, PinIcon, displayName, locationLabel } from "@/components/ui";
 
 export function InternRow({ intern }: { intern: Intern }) {
+  const loc = locationLabel(intern);
   return (
     <Link
       href={`/interns/${intern.id}`}
@@ -20,7 +21,18 @@ export function InternRow({ intern }: { intern: Intern }) {
         )}
       </div>
 
-      <div className="hidden w-40 shrink-0 truncate text-sm text-slate-600 sm:block">
+      <div className="hidden w-44 shrink-0 items-center gap-1 truncate text-sm text-slate-600 sm:flex">
+        {loc ? (
+          <>
+            <PinIcon />
+            <span className="truncate">{loc}</span>
+          </>
+        ) : (
+          "—"
+        )}
+      </div>
+
+      <div className="hidden w-40 shrink-0 truncate text-sm text-slate-600 md:block">
         {intern.educational_institution ?? "—"}
       </div>
 

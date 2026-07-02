@@ -27,6 +27,7 @@ export type InternFilters = {
   tech?: string;
   internYear?: string;
   school?: string;
+  location?: string;
 };
 
 export type ViewMode = "grid" | "list";

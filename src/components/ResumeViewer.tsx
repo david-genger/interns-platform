@@ -8,12 +8,12 @@ import { useEffect, useState } from "react";
  * - Clicking the preview opens the modal viewer.
  * - Clicking the backdrop (or Esc, or ✕) closes it; clicking the PDF does not.
  *
- * `/interns/[id]/resume` redirects to a short-lived signed URL that the
- * iframes load directly.
+ * `src` is a route that redirects to a short-lived signed URL the iframes load
+ * directly — `/interns/[id]/resume` for companies, `/student/resume` for the
+ * student viewing their own.
  */
-export function ResumeViewer({ internId }: { internId: string }) {
+export function ResumeViewer({ src }: { src: string }) {
   const [open, setOpen] = useState(false);
-  const src = `/interns/${internId}/resume`;
   // Hide the browser PDF chrome in the small preview; keep it in the full view.
   const previewSrc = `${src}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
 

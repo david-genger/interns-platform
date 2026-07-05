@@ -1,0 +1,137 @@
+"use server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getStudentByToken } from "@/lib/partners";
+import { createLocalTalentRecord } from "@/lib/airtable-write";
+import { revalidatePath } from "next/cache";
+
+export type SubmitResult = { ok: true } | { ok: false; error: string };
+
+/** Record that the invite link was opened (first view only). */
+export async function markInviteClicked(token: string): Promise<void> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("partner_students")
+    .select("id, status, clicked_at")
+    .eq("invite_token", token)
+    .maybeSingle();
+  if (!data || data.clicked_at) return;
+
+  const update: Record<string, unknown> = {
+    clicked_at: new Date().toISOString(),
+  };
+  // Advance the funnel, but never regress a completed profile.
+  if (data.status === "invited" || data.status === "uploaded") {
+    update.status = "clicked";
+  }
+  await admin.from("partner_students").update(update).eq("id", data.id);
+}
+
+/**
+ * Student submits their profile from the invite page. Uploads the resume to
+ * Storage, creates the (unvetted) Local Talent record in Airtable, and marks
+ * the roster row completed.
+ */
+export async function submitProfile(
+  token: string,
+  formData: FormData
+): Promise<SubmitResult> {
+  const student = await getStudentByToken(token);
+  if (!student) return { ok: false, error: "This invite link is not valid." };
+  if (student.status === "completed") {
+    return { ok: false, error: "You've already submitted your profile." };
+  }
+
+  const firstName = str(formData.get("first_name"));
+  const lastName = str(formData.get("last_name"));
+  const city = str(formData.get("city"));
+  const state = str(formData.get("state"));
+  const remotePreference = str(formData.get("remote_preference"));
+  const expectedGraduation = str(formData.get("expected_graduation"));
+  const technologies = parseTech(formData.get("technologies"));
+  const resume = formData.get("resume");
+
+  if (!(resume instanceof File) || resume.size === 0) {
+    return { ok: false, error: "Please attach your resume." };
+  }
+  if (resume.size > 10 * 1024 * 1024) {
+    return { ok: false, error: "Resume must be under 10 MB." };
+  }
+
+  const admin = createAdminClient();
+
+  // 1. Upload resume to the private bucket.
+  const ext = resume.name.includes(".")
+    ? resume.name.split(".").pop()!.toLowerCase()
+    : "pdf";
+  const path = `partner-invites/${student.id}.${ext}`;
+  const bytes = new Uint8Array(await resume.arrayBuffer());
+  const { error: upErr } = await admin.storage
+    .from("resumes")
+    .upload(path, bytes, {
+      contentType: resume.type || "application/pdf",
+      upsert: true,
+    });
+  if (upErr) return { ok: false, error: `Upload failed: ${upErr.message}` };
+
+  // 2. Short-lived signed URL so Airtable can fetch the file at create time.
+  const { data: signed } = await admin.storage
+    .from("resumes")
+    .createSignedUrl(path, 3600);
+
+  // 3. Create the unvetted Airtable record (Intern Year deliberately unset).
+  let airtableId: string;
+  try {
+    airtableId = await createLocalTalentRecord({
+      firstName,
+      lastName,
+      email: student.email,
+      city,
+      state,
+      remotePreference,
+      expectedGraduation,
+      technologies,
+      school: student.partner_name,
+      resumeUrl: signed?.signedUrl ?? null,
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        "We saved your resume but couldn't finish submitting. Please try again shortly.",
+    };
+  }
+
+  // 4. Mark completed.
+  await admin
+    .from("partner_students")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      airtable_id: airtableId,
+      first_name: firstName ?? student.first_name,
+      last_name: lastName ?? student.last_name,
+    })
+    .eq("id", student.id);
+
+  revalidatePath("/partners");
+  return { ok: true };
+}
+
+function str(v: FormDataEntryValue | null): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length ? t : null;
+}
+
+function parseTech(v: FormDataEntryValue | null): string[] {
+  if (typeof v !== "string") return [];
+  return Array.from(
+    new Set(
+      v
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    )
+  );
+}

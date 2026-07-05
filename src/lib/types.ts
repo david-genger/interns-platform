@@ -16,6 +16,7 @@ export type Intern = {
   state: string | null;
   country: string | null;
   remote_preference: string | null;
+  email: string | null;
   profile_image_url: string | null;
   resume_path: string | null;
   airtable_modified_at: string | null;
@@ -31,3 +32,21 @@ export type InternFilters = {
 };
 
 export type ViewMode = "grid" | "list";
+
+export type Company = {
+  id: string;
+  name: string;
+  domain: string | null;
+  created_at: string;
+};
+
+export type UserRole = "viewer" | "admin";
+
+export type CompanyUser = {
+  id: string;
+  email: string;
+  company_id: string | null;
+  approved: boolean;
+  role: string; // 'viewer' | 'admin'
+  created_at: string;
+};

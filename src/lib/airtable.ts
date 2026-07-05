@@ -13,6 +13,10 @@
 const BASE = process.env.AIRTABLE_BASE_ID!;
 const TABLE = process.env.AIRTABLE_TABLE_ID!;
 const TOKEN = process.env.AIRTABLE_TOKEN!;
+// Separate PAT, scoped to data.records:write on this base only. Kept distinct
+// from the read-only sync TOKEN so the write path is the ONLY thing that can
+// mutate Airtable — currently just the student resume field.
+const WRITE_TOKEN = process.env.AIRTABLE_WRITE_TOKEN!;
 
 // Field IDs in the "Local Talent" table (stable across renames).
 export const FIELD = {
@@ -34,6 +38,7 @@ export const FIELD = {
   remotePreference: "fldErauQK53ZY0tvR",
   profileImage: "fldSOm8fyGYbKzlcK",
   resume: "fld2fSGjnNefUqnqx", // full Resume attachment
+  email: "fldHYPCxfADaPrmSO", // student login match key + company-visible contact
   lastModified: "fldqqlX3UYoabjuHr",
 } as const;
 
@@ -92,6 +97,7 @@ export function mapRecord(rec: AirtableRecord) {
       state: str(f[FIELD.state]),
       country: str(f[FIELD.country]),
       remote_preference: str(f[FIELD.remotePreference]),
+      email: str(f[FIELD.email]),
       airtable_modified_at: str(f[FIELD.lastModified]),
     },
     // Attachments handled separately (re-hosted to Storage).
@@ -129,6 +135,39 @@ export async function fetchAllInternIds(): Promise<Set<string>> {
   } while (offset);
 
   return ids;
+}
+
+/**
+ * Write a new resume back to Airtable's Resume attachment field. `fileUrl` must
+ * be a publicly-fetchable URL (a short-lived Supabase signed URL) — Airtable
+ * downloads and snapshots the bytes itself. Uses the write-scoped token.
+ *
+ * The write bumps the record's Last Modified, so the next sync re-hosts the
+ * same file into Storage — harmless convergence, not a loop.
+ */
+export async function updateResumeAttachment(
+  airtableId: string,
+  fileUrl: string,
+  filename: string
+): Promise<void> {
+  if (!WRITE_TOKEN) {
+    throw new Error("AIRTABLE_WRITE_TOKEN is not configured");
+  }
+  const res = await fetch(`https://api.airtable.com/v0/${BASE}/${TABLE}/${airtableId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${WRITE_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      // Field IDs are accepted as keys in write requests.
+      fields: { [FIELD.resume]: [{ url: fileUrl, filename }] },
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Airtable write ${res.status}: ${await res.text()}`);
+  }
 }
 
 /**

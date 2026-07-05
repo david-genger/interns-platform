@@ -58,18 +58,30 @@ export async function submitProfile(
     return { ok: false, error: "Resume must be under 10 MB." };
   }
 
+  // Only allow document types. The extension and content type are derived from
+  // this whitelist, never from the (attacker-controlled) filename or MIME —
+  // otherwise a student could host arbitrary HTML/JS from our Storage domain.
+  const RESUME_TYPES: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      "docx",
+  };
+  const ext = RESUME_TYPES[resume.type];
+  if (!ext) {
+    return { ok: false, error: "Please upload a PDF or Word document." };
+  }
+
   const admin = createAdminClient();
 
-  // 1. Upload resume to the private bucket.
-  const ext = resume.name.includes(".")
-    ? resume.name.split(".").pop()!.toLowerCase()
-    : "pdf";
+  // 1. Upload resume to the private bucket. Path is built only from IDs from
+  // the whitelist, so it can never escape the partner-invites/ prefix.
   const path = `partner-invites/${student.id}.${ext}`;
   const bytes = new Uint8Array(await resume.arrayBuffer());
   const { error: upErr } = await admin.storage
     .from("resumes")
     .upload(path, bytes, {
-      contentType: resume.type || "application/pdf",
+      contentType: resume.type,
       upsert: true,
     });
   if (upErr) return { ok: false, error: `Upload failed: ${upErr.message}` };

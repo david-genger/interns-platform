@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/interns";
+  // Only allow same-origin relative paths. Reject anything that could redirect
+  // off-site: protocol-relative ("//evil.com"), backslash tricks, or absolute
+  // URLs. Everything else falls back to the default landing page.
+  const rawNext = searchParams.get("next");
+  const next = isSafeNext(rawNext) ? rawNext! : "/interns";
 
   if (code) {
     const supabase = createClient();
@@ -14,4 +18,12 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);
+}
+
+/** True only for same-origin relative paths (e.g. "/interns"). */
+function isSafeNext(next: string | null): next is string {
+  if (!next) return false;
+  // Must be a root-relative path, but not protocol-relative ("//host") or a
+  // backslash variant browsers normalise to "//".
+  return /^\/(?![/\\])/.test(next);
 }

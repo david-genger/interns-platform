@@ -9,7 +9,15 @@ import {
 } from "@/components/ui";
 import { ResumeViewer } from "@/components/ResumeViewer";
 
-export function InternProfile({ intern }: { intern: Intern }) {
+export function InternProfile({
+  intern,
+  resumeSrc,
+}: {
+  intern: Intern;
+  /** Resume route to load. Defaults to the company-gated route; the student
+   *  dashboard passes `/student/resume` to serve their own copy. */
+  resumeSrc?: string;
+}) {
   const loc = locationLabel(intern);
   const grad = gradLabel(intern);
 
@@ -28,6 +36,16 @@ export function InternProfile({ intern }: { intern: Intern }) {
             <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
               <PinIcon />
               <span>{loc}</span>
+            </p>
+          )}
+          {intern.email && (
+            <p className="mt-1 text-sm">
+              <a
+                href={`mailto:${intern.email}`}
+                className="text-brand hover:underline"
+              >
+                {intern.email}
+              </a>
             </p>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -70,7 +88,9 @@ export function InternProfile({ intern }: { intern: Intern }) {
         </section>
       )}
 
-      {intern.resume_path && <ResumeViewer internId={intern.id} />}
+      {intern.resume_path && (
+        <ResumeViewer src={resumeSrc ?? `/interns/${intern.id}/resume`} />
+      )}
     </div>
   );
 }

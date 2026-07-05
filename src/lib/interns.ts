@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Intern, InternFilters } from "@/lib/types";
 
 const COLUMNS =
-  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
+  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, email, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
 
 /** List interns for the logged-in (approved) user. RLS enforces access. */
 export async function getInterns(filters: InternFilters): Promise<Intern[]> {
@@ -61,6 +61,39 @@ export async function getFacets() {
     schools: [...schools].sort(),
     locations: [...locations].sort(),
   };
+}
+
+/**
+ * Resolve the logged-in student's OWN intern record by email match. RLS's
+ * "student reads own row" policy limits this to their single row. Returns null
+ * if the signed-in email doesn't match any intern (e.g. a company user, or a
+ * student who used the wrong email).
+ */
+export async function getMyIntern(): Promise<Intern | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return null;
+
+  const { data } = await supabase
+    .from("interns")
+    .select(COLUMNS)
+    .eq("email", user.email.toLowerCase())
+    .maybeSingle();
+  return (data as Intern) ?? null;
+}
+
+/** Mint a short-lived signed URL for the logged-in student's own resume. */
+export async function getMyResumeSignedUrl(): Promise<string | null> {
+  const intern = await getMyIntern();
+  if (!intern?.resume_path) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin.storage
+    .from("resumes")
+    .createSignedUrl(intern.resume_path, 60 * 5); // 5 minutes
+  return data?.signedUrl ?? null;
 }
 
 /**

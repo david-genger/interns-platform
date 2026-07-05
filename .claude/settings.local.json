@@ -10,7 +10,12 @@
       "Bash(grep -oiE 'Kade Regular[^}]{0,220}' devx.html)",
       "Bash(grep -oiE 'Halyard Micro Medium[^}]{0,220}' devx.html)",
       "Bash(npm run *)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"root=%{http_code}\\\\n\" http://localhost:3000/ --max-time 40)",
+      "Bash(curl -s -m 40 http://localhost:3000/student/login -o /tmp/sl.html -w \"login=%{http_code}\\\\n\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s -m 45 http://localhost:3000/student/login -o /tmp/sl.html -w \"login=%{http_code}\\\\n\")"
     ]
   }
 }

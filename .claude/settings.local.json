@@ -19,7 +19,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(kill -0 %1)",
       "Bash(break)",
-      "Bash(wait %1)"
+      "Bash(wait %1)",
+      "Bash(npx next *)"
     ]
   }
 }

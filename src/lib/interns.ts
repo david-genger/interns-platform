@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Intern, InternFilters } from "@/lib/types";
 
 const COLUMNS =
-  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, email, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
+  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, email, phone, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
 
 /** List interns for the logged-in (approved) user. RLS enforces access. */
 export async function getInterns(filters: InternFilters): Promise<Intern[]> {

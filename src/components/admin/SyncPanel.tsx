@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { triggerSync } from "@/app/admin/actions";
-import type { SyncResult } from "@/lib/sync";
+import type { SyncMode, SyncResult } from "@/lib/sync";
 
 export function SyncPanel({
   internCount,
@@ -15,11 +15,11 @@ export function SyncPanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SyncResult | null>(null);
 
-  function run() {
+  function run(mode: SyncMode) {
     setError(null);
     setResult(null);
     startTransition(async () => {
-      const res = await triggerSync("hourly");
+      const res = await triggerSync(mode);
       if (res.ok) setResult(res.result ?? null);
       else setError(res.error ?? "Sync failed.");
     });
@@ -43,22 +43,43 @@ export function SyncPanel({
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium text-slate-800">
-              Run hourly sync now
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-slate-800">
+                Run hourly sync now
+              </div>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Pulls interns modified in the last ~2 hours from Airtable.
+              </p>
             </div>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Pulls interns modified in the last ~2 hours from Airtable.
-            </p>
+            <button
+              onClick={() => run("hourly")}
+              disabled={pending}
+              className="h-9 shrink-0 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+            >
+              {pending ? "Syncing…" : "Sync now"}
+            </button>
           </div>
-          <button
-            onClick={run}
-            disabled={pending}
-            className="h-9 shrink-0 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
-          >
-            {pending ? "Syncing…" : "Sync now"}
-          </button>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <div>
+              <div className="text-sm font-medium text-slate-800">
+                Full backfill
+              </div>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Re-syncs every current intern, no time window. Use after adding
+                a new mirrored field (e.g. email) so older records pick it up.
+              </p>
+            </div>
+            <button
+              onClick={() => run("backfill")}
+              disabled={pending}
+              className="h-9 shrink-0 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {pending ? "Syncing…" : "Backfill all"}
+            </button>
+          </div>
         </div>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

@@ -48,6 +48,16 @@ export function InternProfile({
               </a>
             </p>
           )}
+          {intern.phone && (
+            <p className="mt-1 text-sm">
+              <a
+                href={`tel:${intern.phone}`}
+                className="text-brand hover:underline"
+              >
+                {intern.phone}
+              </a>
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {intern.intern_year && <Pill>Intern {intern.intern_year}</Pill>}
             {intern.remote_preference && <Pill>{intern.remote_preference}</Pill>}

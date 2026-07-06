@@ -17,6 +17,7 @@ export type Intern = {
   country: string | null;
   remote_preference: string | null;
   email: string | null;
+  phone: string | null;
   profile_image_url: string | null;
   resume_path: string | null;
   airtable_modified_at: string | null;

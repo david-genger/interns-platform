@@ -6,12 +6,15 @@ import {
   type AirtableAttachment,
 } from "@/lib/airtable";
 
-export type SyncMode = "hourly" | "daily";
+export type SyncMode = "hourly" | "daily" | "backfill";
 
-// Hourly = catch new/just-touched interns quickly. Daily = reconcile recent edits.
-const WINDOW_HOURS: Record<SyncMode, number> = {
+// Hourly = catch new/just-touched interns quickly. Daily = reconcile recent
+// edits. Backfill = no window: re-sync every current intern, so columns added
+// after a record was last modified in Airtable still get populated.
+const WINDOW_HOURS: Record<SyncMode, number | null> = {
   hourly: 2,
   daily: 25,
+  backfill: null,
 };
 
 export type SyncResult = {

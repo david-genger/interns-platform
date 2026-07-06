@@ -39,6 +39,7 @@ export const FIELD = {
   profileImage: "fldSOm8fyGYbKzlcK",
   resume: "fld2fSGjnNefUqnqx", // full Resume attachment
   email: "fldHYPCxfADaPrmSO", // student login match key + company-visible contact
+  phone: "fld08nVIKQMljWY3u", // company-visible contact
   lastModified: "fldqqlX3UYoabjuHr",
 } as const;
 
@@ -98,6 +99,7 @@ export function mapRecord(rec: AirtableRecord) {
       country: str(f[FIELD.country]),
       remote_preference: str(f[FIELD.remotePreference]),
       email: str(f[FIELD.email]),
+      phone: str(f[FIELD.phone]),
       airtable_modified_at: str(f[FIELD.lastModified]),
     },
     // Attachments handled separately (re-hosted to Storage).
@@ -173,9 +175,14 @@ export async function updateResumeAttachment(
 /**
  * Fetch intern records modified within the last `hours`, paginating until done.
  * Only requests the mapped fields. Used by both sync tiers (different windows).
+ * Pass `null` to skip the time window and fetch every current intern — used by
+ * the backfill sync to populate columns added after records were last touched.
  */
-export async function fetchInterns(hours: number): Promise<AirtableRecord[]> {
-  const filterByFormula = `AND({Intern Year}, IS_AFTER({Last Modified}, DATEADD(NOW(), -${hours}, 'hours')))`;
+export async function fetchInterns(hours: number | null): Promise<AirtableRecord[]> {
+  const filterByFormula =
+    hours == null
+      ? `{Intern Year}`
+      : `AND({Intern Year}, IS_AFTER({Last Modified}, DATEADD(NOW(), -${hours}, 'hours')))`;
 
   const fieldIds = Object.values(FIELD);
   const records: AirtableRecord[] = [];

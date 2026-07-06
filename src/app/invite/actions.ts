@@ -1,8 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudentByToken } from "@/lib/partners";
 import { createLocalTalentRecord } from "@/lib/airtable-write";
+import { sendStudentSignupNotification } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
@@ -140,8 +142,33 @@ export async function submitProfile(
     })
     .eq("id", student.id);
 
+  // Best-effort: tell David a new student is waiting for review.
+  const name =
+    [firstName, lastName].filter(Boolean).join(" ").trim() ||
+    [student.first_name, student.last_name].filter(Boolean).join(" ").trim() ||
+    null;
+  const { ok, error } = await sendStudentSignupNotification({
+    name,
+    email: student.email,
+    school: student.partner_name,
+    reviewUrl: `${siteBase()}/admin/candidates`,
+  });
+  if (!ok && error !== "email-not-configured") {
+    console.error("[invite:notify-student]", error);
+  }
+
   revalidatePath("/partners");
   return { ok: true };
+}
+
+/** Absolute base URL (prefers the configured site URL). */
+function siteBase(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  const h = headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
 }
 
 function str(v: FormDataEntryValue | null): string | null {

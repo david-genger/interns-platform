@@ -68,7 +68,22 @@ function UserRow({
   return (
     <tr className={pending ? "opacity-60" : undefined}>
       <td className="px-4 py-3">
-        <div className="font-medium text-slate-800">{user.email}</div>
+        {user.full_name && (
+          <div className="font-medium text-slate-800">{user.full_name}</div>
+        )}
+        <div className={user.full_name ? "text-slate-600" : "font-medium text-slate-800"}>
+          {user.email}
+        </div>
+        {(user.phone || user.worked_with_devx) && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+            {user.phone && <span>{user.phone}</span>}
+            {user.worked_with_devx && (
+              <span className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 font-medium text-brand">
+                Prior Devx client
+              </span>
+            )}
+          </div>
+        )}
         {error && <div className="mt-0.5 text-xs text-red-600">{error}</div>}
       </td>
 

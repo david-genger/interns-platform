@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendStudentDenialEmail } from "@/lib/email";
 import { runSync, type SyncMode, type SyncResult } from "@/lib/sync";
+import type { ReviewStatus } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; error?: string };
 
 const USERS_PATH = "/admin/users";
 const COMPANIES_PATH = "/admin/companies";
+const CANDIDATES_PATH = "/admin/candidates";
 
 /** Log the real DB error, return a generic message (no schema leakage). */
 function safeError(context: string, err: unknown): string {
@@ -161,6 +164,57 @@ export async function deleteCompany(id: string): Promise<ActionResult> {
   if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(COMPANIES_PATH);
   revalidatePath(USERS_PATH);
+  return { ok: true };
+}
+
+// ------------------------------------------------------------------
+// Candidates (interns) review
+// ------------------------------------------------------------------
+
+/**
+ * Set a candidate's review status. 'approved' makes them visible to companies;
+ * 'denied' / 'pending' hide them. The decision lives on the intern row and is
+ * preserved across every sync (the sync upsert never lists these columns), so
+ * denials stay put and remain visible under the admin Denied filter.
+ */
+export async function setCandidateReview(
+  id: string,
+  status: ReviewStatus,
+  note?: string | null
+): Promise<ActionResult> {
+  const email = await requireAdmin();
+  if (status !== "pending" && status !== "approved" && status !== "denied") {
+    return { ok: false, error: "Invalid status." };
+  }
+
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
+    .from("interns")
+    .update({
+      review_status: status,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: email,
+      // Only touch the note when one is explicitly provided.
+      ...(note !== undefined ? { review_note: note?.trim() || null } : {}),
+    })
+    .eq("id", id)
+    .select("email, first_name, review_status")
+    .single();
+  if (error) return { ok: false, error: safeError("setCandidateReview", error) };
+
+  // On denial, send the warm "we'll help you find a regular role" email.
+  // Best-effort — never fail the review action if the email can't be sent.
+  if (status === "denied" && updated?.email) {
+    const { ok, error: mailErr } = await sendStudentDenialEmail({
+      to: updated.email,
+      firstName: updated.first_name ?? null,
+    });
+    if (!ok && mailErr !== "email-not-configured") {
+      console.error("[admin:denyCandidate:email]", mailErr);
+    }
+  }
+
+  revalidatePath(CANDIDATES_PATH);
   return { ok: true };
 }
 

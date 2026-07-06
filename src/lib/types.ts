@@ -18,10 +18,28 @@ export type Intern = {
   remote_preference: string | null;
   email: string | null;
   phone: string | null;
+  linkedin_url: string | null;
   profile_image_url: string | null;
   resume_path: string | null;
+  review_status: ReviewStatus;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
   airtable_modified_at: string | null;
   last_synced_at: string;
+};
+
+/** Candidate approval gate. Companies only ever see `approved` interns. */
+export type ReviewStatus = "pending" | "approved" | "denied";
+
+/** A live project link an intern publishes. Supabase-only (not in Airtable). */
+export type InternProject = {
+  id: string;
+  intern_id: string;
+  url: string;
+  title: string | null;
+  sort_order: number;
+  created_at: string;
 };
 
 export type InternFilters = {
@@ -49,5 +67,8 @@ export type CompanyUser = {
   company_id: string | null;
   approved: boolean;
   role: string; // 'viewer' | 'admin'
+  full_name: string | null;
+  phone: string | null;
+  worked_with_devx: boolean;
   created_at: string;
 };

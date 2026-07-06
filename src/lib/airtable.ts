@@ -40,6 +40,7 @@ export const FIELD = {
   resume: "fld2fSGjnNefUqnqx", // full Resume attachment
   email: "fldHYPCxfADaPrmSO", // student login match key + company-visible contact
   phone: "fld08nVIKQMljWY3u", // company-visible contact
+  linkedin: "fldU6vHPqLsFvMQnF", // "LinkedIn Profile" — company-visible
   lastModified: "fldqqlX3UYoabjuHr",
 } as const;
 
@@ -100,6 +101,7 @@ export function mapRecord(rec: AirtableRecord) {
       remote_preference: str(f[FIELD.remotePreference]),
       email: str(f[FIELD.email]),
       phone: str(f[FIELD.phone]),
+      linkedin_url: str(f[FIELD.linkedin]),
       airtable_modified_at: str(f[FIELD.lastModified]),
     },
     // Attachments handled separately (re-hosted to Storage).
@@ -170,6 +172,97 @@ export async function updateResumeAttachment(
   if (!res.ok) {
     throw new Error(`Airtable write ${res.status}: ${await res.text()}`);
   }
+}
+
+/** A student-editable field the write-back supports. Values map to FIELD ids. */
+export type InternFieldUpdate = {
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  headline?: string | null;
+  city?: string | null;
+  state?: string | null;
+  location?: string | null;
+  remotePreference?: string | null;
+  linkedInUrl?: string | null;
+  technologies?: string[];
+  /** Publicly-fetchable URL Airtable snapshots into the Profile Image field. */
+  profileImageUrl?: string | null;
+};
+
+/**
+ * Patch the subset of writable fields a student can edit back into Airtable,
+ * keeping the source of truth in sync. Uses the write-scoped token. Only the
+ * keys present in `u` are written, so an unset key is left untouched in
+ * Airtable. Each write bumps Last Modified, so the next sync re-hosts any
+ * attachment — harmless convergence, not a loop.
+ */
+export async function updateInternFields(
+  airtableId: string,
+  u: InternFieldUpdate
+): Promise<void> {
+  if (!WRITE_TOKEN) {
+    throw new Error("AIRTABLE_WRITE_TOKEN is not configured");
+  }
+
+  const fields: Record<string, unknown> = {};
+  if (u.name !== undefined) fields[FIELD.name] = u.name;
+  if (u.firstName !== undefined) fields[FIELD.firstName] = u.firstName;
+  if (u.lastName !== undefined) fields[FIELD.lastName] = u.lastName;
+  if (u.headline !== undefined) fields[FIELD.jobTitle] = u.headline;
+  if (u.city !== undefined) fields[FIELD.city] = u.city;
+  if (u.state !== undefined) fields[FIELD.state] = u.state;
+  if (u.location !== undefined) fields[FIELD.location] = u.location;
+  if (u.remotePreference !== undefined) {
+    fields[FIELD.remotePreference] = u.remotePreference;
+  }
+  if (u.linkedInUrl !== undefined) fields[FIELD.linkedin] = u.linkedInUrl;
+  if (u.technologies !== undefined) fields[FIELD.technologies] = u.technologies;
+  if (u.profileImageUrl) {
+    fields[FIELD.profileImage] = [{ url: u.profileImageUrl }];
+  }
+
+  if (Object.keys(fields).length === 0) return;
+
+  const res = await fetch(
+    `https://api.airtable.com/v0/${BASE}/${TABLE}/${airtableId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${WRITE_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      // typecast so single-select fields (remote preference) accept labels.
+      body: JSON.stringify({ fields, typecast: true }),
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Airtable write ${res.status}: ${await res.text()}`);
+  }
+}
+
+/**
+ * Fetch a single intern record by id (all mapped fields), or null if it's gone.
+ * Used right after a self-serve signup to materialize the Supabase row before
+ * the next scheduled sync, so the student can sign in and edit immediately.
+ */
+export async function fetchInternById(
+  airtableId: string
+): Promise<AirtableRecord | null> {
+  const url = new URL(
+    `https://api.airtable.com/v0/${BASE}/${TABLE}/${airtableId}`
+  );
+  url.searchParams.set("returnFieldsByFieldId", "true");
+  for (const id of Object.values(FIELD)) url.searchParams.append("fields[]", id);
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
+  return (await res.json()) as AirtableRecord;
 }
 
 /**

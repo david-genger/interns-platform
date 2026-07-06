@@ -10,6 +10,12 @@ export type ActionResult = { ok: boolean; error?: string };
 const USERS_PATH = "/admin/users";
 const COMPANIES_PATH = "/admin/companies";
 
+/** Log the real DB error, return a generic message (no schema leakage). */
+function safeError(context: string, err: unknown): string {
+  console.error(`[admin:${context}]`, err);
+  return "Something went wrong. Please try again.";
+}
+
 // ------------------------------------------------------------------
 // Company users
 // ------------------------------------------------------------------
@@ -42,7 +48,7 @@ export async function addUser(formData: FormData): Promise<ActionResult> {
     if (error.code === "23505") {
       return { ok: false, error: "That email is already on the list." };
     }
-    return { ok: false, error: error.message };
+    return { ok: false, error: safeError("addUser", error) };
   }
 
   revalidatePath(USERS_PATH);
@@ -59,7 +65,7 @@ export async function setUserApproved(
     .from("company_users")
     .update({ approved })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(USERS_PATH);
   return { ok: true };
 }
@@ -77,7 +83,7 @@ export async function setUserRole(
     .from("company_users")
     .update({ role })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(USERS_PATH);
   return { ok: true };
 }
@@ -92,7 +98,7 @@ export async function setUserCompany(
     .from("company_users")
     .update({ company_id: companyId || null })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(USERS_PATH);
   return { ok: true };
 }
@@ -101,7 +107,7 @@ export async function removeUser(id: string): Promise<ActionResult> {
   await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.from("company_users").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(USERS_PATH);
   return { ok: true };
 }
@@ -118,7 +124,7 @@ export async function createCompany(formData: FormData): Promise<ActionResult> {
 
   const admin = createAdminClient();
   const { error } = await admin.from("companies").insert({ name, domain });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(COMPANIES_PATH);
   revalidatePath(USERS_PATH);
   return { ok: true };
@@ -138,7 +144,7 @@ export async function updateCompany(
     .from("companies")
     .update({ name: trimmed, domain: domain?.trim() || null })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(COMPANIES_PATH);
   revalidatePath(USERS_PATH);
   return { ok: true };
@@ -152,7 +158,7 @@ export async function deleteCompany(id: string): Promise<ActionResult> {
   await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.from("companies").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(COMPANIES_PATH);
   revalidatePath(USERS_PATH);
   return { ok: true };

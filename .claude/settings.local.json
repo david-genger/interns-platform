@@ -15,7 +15,11 @@
       "Bash(curl -s -o /dev/null -w \"root=%{http_code}\\\\n\" http://localhost:3000/ --max-time 40)",
       "Bash(curl -s -m 40 http://localhost:3000/student/login -o /tmp/sl.html -w \"login=%{http_code}\\\\n\")",
       "Read(//tmp/**)",
-      "Bash(curl -s -m 45 http://localhost:3000/student/login -o /tmp/sl.html -w \"login=%{http_code}\\\\n\")"
+      "Bash(curl -s -m 45 http://localhost:3000/student/login -o /tmp/sl.html -w \"login=%{http_code}\\\\n\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(kill -0 %1)",
+      "Bash(break)",
+      "Bash(wait %1)"
     ]
   }
 }

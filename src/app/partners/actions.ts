@@ -6,6 +6,22 @@ import type { RosterRow } from "@/lib/csv";
 import { sendInviteBatch, emailConfigured, type InviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+
+/** Days an invite link stays valid after it's (re)sent. */
+const INVITE_TTL_DAYS = 30;
+function inviteExpiry(): string {
+  return new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Log the real error server-side and return a generic message. Keeps Postgres
+ * schema/constraint details out of responses that reach untrusted clients.
+ */
+function safeError(context: string, err: unknown): string {
+  console.error(`[partners:${context}]`, err);
+  return "Something went wrong. Please try again.";
+}
 
 export type RegisterResult = { ok: true } | { ok: false; error: string };
 
@@ -76,7 +92,7 @@ export async function addStudents(
       }))
     );
     if (error) {
-      return { ok: false, added: 0, skipped: 0, error: error.message };
+      return { ok: false, added: 0, skipped: 0, error: safeError("addStudents", error) };
     }
   }
 
@@ -166,7 +182,11 @@ export async function sendInvites(): Promise<SendInvitesResult> {
     if (sentIds.length > 0) {
       await admin
         .from("partner_students")
-        .update({ status: "invited", invited_at: new Date().toISOString() })
+        .update({
+          status: "invited",
+          invited_at: new Date().toISOString(),
+          expires_at: inviteExpiry(),
+        })
         .in("id", sentIds);
       sent += sentIds.length;
     }
@@ -221,9 +241,13 @@ export async function resendInvite(
     return { ok: false, error: error ?? "Couldn't send the email." };
   }
 
-  // Bump invited_at; only advance an un-invited student to "invited" (don't
-  // regress someone who already clicked or completed).
-  const update: Record<string, unknown> = { invited_at: new Date().toISOString() };
+  // Bump invited_at and refresh the link's expiry (reviving an expired link);
+  // only advance an un-invited student to "invited" (don't regress someone who
+  // already clicked or completed).
+  const update: Record<string, unknown> = {
+    invited_at: new Date().toISOString(),
+    expires_at: inviteExpiry(),
+  };
   if (student.status === "uploaded") update.status = "invited";
   await admin.from("partner_students").update(update).eq("id", studentId);
 
@@ -245,6 +269,11 @@ export async function registerPartner(input: {
   website: string;
   email: string;
 }): Promise<RegisterResult> {
+  // Public endpoint — throttle per IP to blunt signup floods.
+  if (!rateLimit(`registerPartner:${clientIp()}`, 5, 10 * 60 * 1000).ok) {
+    return { ok: false, error: "Too many attempts. Please try again shortly." };
+  }
+
   const email = input.email.trim().toLowerCase();
   const orgName = input.orgName.trim();
   const website = input.website.trim();
@@ -272,7 +301,7 @@ export async function registerPartner(input: {
     .insert({ name: orgName, website: website || null })
     .select("id")
     .single();
-  if (partnerErr) return { ok: false, error: partnerErr.message };
+  if (partnerErr) return { ok: false, error: safeError("registerPartner:partner", partnerErr) };
 
   const { error: userErr } = await admin.from("partner_users").insert({
     email,
@@ -280,7 +309,7 @@ export async function registerPartner(input: {
     approved: false,
     role: "staff",
   });
-  if (userErr) return { ok: false, error: userErr.message };
+  if (userErr) return { ok: false, error: safeError("registerPartner:user", userErr) };
 
   return { ok: true };
 }

@@ -30,6 +30,7 @@ export type PartnerStudent = {
   completed_at: string | null;
   airtable_id: string | null;
   created_at: string;
+  expires_at: string | null;
 };
 
 /**
@@ -113,11 +114,16 @@ export async function getStudentByToken(
   const { data } = await admin
     .from("partner_students")
     .select(
-      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, airtable_id, created_at, partners(name)"
+      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, airtable_id, created_at, expires_at, partners(name)"
     )
     .eq("invite_token", token)
     .maybeSingle();
   if (!data) return null;
+
+  // A NULL expiry means "never expires" (legacy rows predating 0004). Otherwise
+  // an elapsed expiry makes the link dead, regardless of status.
+  const expiresAt = (data as { expires_at: string | null }).expires_at;
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) return null;
   const { partners, ...student } = data as PartnerStudent & {
     // Supabase types an embedded to-one relation as an array.
     partners: { name: string } | { name: string }[] | null;

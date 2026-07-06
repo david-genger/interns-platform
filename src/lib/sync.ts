@@ -81,7 +81,7 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
     }
   }
 
-  for (const rec of records) {
+  async function processRecord(rec: (typeof records)[number]): Promise<void> {
     try {
       const { row, profileImage, resume } = mapRecord(rec);
 
@@ -90,10 +90,13 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
         prevModified && row.airtable_modified_at && prevModified === row.airtable_modified_at;
 
       // Hourly tier: skip rows we already have at the same revision — keeps it cheap.
-      if (mode === "hourly" && unchanged) continue;
+      if (mode === "hourly" && unchanged) return;
 
-      const profile_image_url = await rehost("profile-images", rec.id, profileImage);
-      const resume_path = await rehost("resumes", rec.id, resume);
+      // The two attachments are independent — fetch/upload them concurrently.
+      const [profile_image_url, resume_path] = await Promise.all([
+        rehost("profile-images", rec.id, profileImage),
+        rehost("resumes", rec.id, resume),
+      ]);
 
       const { error } = await admin.from("interns").upsert(
         {
@@ -109,6 +112,13 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
     } catch (e) {
       errors.push(`${rec.id}: ${(e as Error).message}`);
     }
+  }
+
+  // Process records with bounded concurrency so a growing intern set doesn't
+  // run the (serial) re-hosting into the function timeout.
+  const CONCURRENCY = 5;
+  for (let i = 0; i < records.length; i += CONCURRENCY) {
+    await Promise.all(records.slice(i, i + CONCURRENCY).map(processRecord));
   }
 
   // Reconcile: delete interns whose Intern Year was cleared in Airtable (they

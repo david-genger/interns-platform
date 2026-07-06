@@ -4,11 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudentByToken } from "@/lib/partners";
 import { createLocalTalentRecord } from "@/lib/airtable-write";
 import { revalidatePath } from "next/cache";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export type SubmitResult = { ok: true } | { ok: false; error: string };
 
 /** Record that the invite link was opened (first view only). */
 export async function markInviteClicked(token: string): Promise<void> {
+  // Cheap public write — cap per IP to avoid it being used as a token oracle
+  // or a write flood. Silently no-op when over the limit.
+  if (!rateLimit(`markInviteClicked:${clientIp()}`, 60, 60 * 1000).ok) return;
+
   const admin = createAdminClient();
   const { data } = await admin
     .from("partner_students")
@@ -36,6 +41,12 @@ export async function submitProfile(
   token: string,
   formData: FormData
 ): Promise<SubmitResult> {
+  // Public endpoint that creates an Airtable record + Storage upload — throttle
+  // per IP to cap abuse and cost.
+  if (!rateLimit(`submitProfile:${clientIp()}`, 10, 10 * 60 * 1000).ok) {
+    return { ok: false, error: "Too many attempts. Please try again shortly." };
+  }
+
   const student = await getStudentByToken(token);
   if (!student) return { ok: false, error: "This invite link is not valid." };
   if (student.status === "completed") {
@@ -84,7 +95,10 @@ export async function submitProfile(
       contentType: resume.type,
       upsert: true,
     });
-  if (upErr) return { ok: false, error: `Upload failed: ${upErr.message}` };
+  if (upErr) {
+    console.error("[invite:submitProfile] resume upload failed", upErr);
+    return { ok: false, error: "We couldn't upload your resume. Please try again." };
+  }
 
   // 2. Short-lived signed URL so Airtable can fetch the file at create time.
   const { data: signed } = await admin.storage

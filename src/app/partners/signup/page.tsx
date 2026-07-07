@@ -3,23 +3,30 @@
 import { createClient } from "@/lib/supabase/client";
 import { DevxLogo } from "@/components/Logo";
 import { registerPartner } from "../actions";
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function PartnerSignupPage() {
+  const router = useRouter();
+  // Email comes from the signed-in session (captured at the sign-in step).
+  const [email, setEmail] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("");
   const [website, setWebsite] = useState("");
-  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function siteUrl() {
-    return process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-  }
+  // Require a session; a signed-out visitor is sent to the unified sign-in page.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) router.replace("/login");
+      else setEmail(user.email);
+    });
+  }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!email) return;
     setError(null);
     setLoading(true);
 
@@ -30,16 +37,9 @@ export default function PartnerSignupPage() {
       return;
     }
 
-    // Send a magic link so they can sign in (they'll land on the pending screen
-    // until David approves the account).
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${siteUrl()}/auth/callback?next=/partners` },
-    });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    // Already signed in — no magic link needed. Land on the pending screen
+    // until an admin approves the account.
+    router.replace("/partners/pending");
   }
 
   return (
@@ -85,18 +85,16 @@ export default function PartnerSignupPage() {
             email you once you&apos;re approved.
           </p>
 
-          {sent ? (
-            <div className="mt-8 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-              <p className="font-medium">Check your email</p>
-              <p className="mt-1 text-emerald-700">
-                We sent a sign-in link to{" "}
-                <span className="font-medium">{email}</span>. Open it to finish
-                setting up. Your account will be reviewed before you can send
-                invites.
-              </p>
-            </div>
+          {email === null ? (
+            <p className="mt-8 text-sm text-slate-400">Loading…</p>
           ) : (
             <form onSubmit={onSubmit} className="mt-8 space-y-3">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                <span className="text-xs font-medium text-slate-500">
+                  Signed in as
+                </span>
+                <div className="font-medium text-slate-800">{email}</div>
+              </div>
               <Field
                 label="Bootcamp / college name"
                 value={orgName}
@@ -111,35 +109,17 @@ export default function PartnerSignupPage() {
                 placeholder="acmebootcamp.com"
                 type="text"
               />
-              <Field
-                label="Your work email"
-                value={email}
-                onChange={setEmail}
-                placeholder="you@acmebootcamp.com"
-                type="email"
-                required
-              />
               <button
                 type="submit"
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
-                {loading ? "Submitting…" : "Create account"}
+                {loading ? "Submitting…" : "Submit for approval"}
               </button>
             </form>
           )}
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-          <p className="mt-6 text-sm text-slate-500">
-            Already registered?{" "}
-            <Link
-              href="/partners/login"
-              className="font-medium text-brand hover:underline"
-            >
-              Sign in
-            </Link>
-          </p>
         </div>
       </section>
     </main>

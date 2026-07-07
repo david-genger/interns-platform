@@ -12,10 +12,44 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export type RegisterResult = { ok: true } | { ok: false; error: string };
 
-/** Log the real error server-side, return a generic message (no schema leakage). */
-function safeError(context: string, err: unknown): string {
+/**
+ * Log the real error server-side (with its `[signup:<stage>]` tag, visible in
+ * Vercel logs) and return a safe, user-facing message. The message names the
+ * STAGE that failed — no schema leakage, but enough to tell resume-upload from
+ * an Airtable write from a DB save without digging through logs.
+ */
+function safeError(
+  context: string,
+  err: unknown,
+  userMsg = "Something went wrong. Please try again."
+): string {
   console.error(`[signup:${context}]`, err);
-  return "Something went wrong. Please try again.";
+  return userMsg;
+}
+
+/**
+ * Known bootcamps / colleges for the student signup dropdown, sourced from data
+ * we already have: registered partner orgs + every school already on a candidate
+ * record. De-duplicated (case-insensitive) and alphabetised. The form adds an
+ * "Other" option on top, so the list grows itself as new schools come through.
+ */
+export async function getSchoolOptions(): Promise<string[]> {
+  const admin = createAdminClient();
+  const [partnersRes, internsRes] = await Promise.all([
+    admin.from("partners").select("name"),
+    admin.from("interns").select("educational_institution"),
+  ]);
+
+  const byLower = new Map<string, string>();
+  const add = (v: unknown) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    if (s && !byLower.has(s.toLowerCase())) byLower.set(s.toLowerCase(), s);
+  };
+  for (const p of partnersRes.data ?? []) add((p as { name: string }).name);
+  for (const i of internsRes.data ?? [])
+    add((i as { educational_institution: string | null }).educational_institution);
+
+  return [...byLower.values()].sort((a, b) => a.localeCompare(b));
 }
 
 /** Absolute base URL (prefers the configured site URL). */
@@ -229,7 +263,15 @@ export async function registerStudent(
       contentType: "application/pdf",
       upsert: true,
     });
-  if (rErr) return { ok: false, error: safeError("registerStudent:resume", rErr) };
+  if (rErr)
+    return {
+      ok: false,
+      error: safeError(
+        "registerStudent:resume",
+        rErr,
+        "We couldn't upload your resume. Please try again."
+      ),
+    };
 
   let photoUrl: string | null = null;
   if (photo instanceof File && photoExt) {
@@ -240,7 +282,15 @@ export async function registerStudent(
         contentType: photo.type,
         upsert: true,
       });
-    if (pErr) return { ok: false, error: safeError("registerStudent:photo", pErr) };
+    if (pErr)
+      return {
+        ok: false,
+        error: safeError(
+          "registerStudent:photo",
+          pErr,
+          "We couldn't upload your profile photo. Please try again."
+        ),
+      };
     photoUrl = admin.storage.from("profile-images").getPublicUrl(photoPath).data
       .publicUrl;
   }
@@ -269,7 +319,14 @@ export async function registerStudent(
       internYear: defaultInternYear(),
     });
   } catch (e) {
-    return { ok: false, error: safeError("registerStudent:airtable", e) };
+    return {
+      ok: false,
+      error: safeError(
+        "registerStudent:airtable",
+        e,
+        "We couldn't submit your application to our records system. Please try again shortly."
+      ),
+    };
   }
 
   // 4. Materialize the Supabase row now so the student can edit immediately.
@@ -303,7 +360,14 @@ export async function registerStudent(
     .select("id")
     .single();
   if (upErr || !internRow) {
-    return { ok: false, error: safeError("registerStudent:upsert", upErr) };
+    return {
+      ok: false,
+      error: safeError(
+        "registerStudent:upsert",
+        upErr,
+        "We couldn't save your profile to the database. Please try again."
+      ),
+    };
   }
 
   // 5. Insert published project links.

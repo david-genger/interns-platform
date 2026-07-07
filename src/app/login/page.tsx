@@ -81,10 +81,12 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Sign In to the Intern Portal
+            Sign in or create your account
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Access is limited to approved companies.
+            New to Devx? Just enter your email — we&apos;ll send a link to get
+            you started. Already have an account? Same thing, you&apos;ll go
+            straight in.
           </p>
 
           {sent ? (

@@ -17,7 +17,11 @@ import { FIELD } from "@/lib/airtable";
 
 const BASE = process.env.AIRTABLE_BASE_ID!;
 const TABLE = process.env.AIRTABLE_TABLE_ID!;
-const TOKEN = process.env.AIRTABLE_TOKEN!;
+// Creating records needs WRITE scope. AIRTABLE_TOKEN is the read-only sync
+// token, so prefer the write-scoped token (same one airtable.ts uses for the
+// resume write-back); fall back to AIRTABLE_TOKEN only if a single token carries
+// both scopes.
+const TOKEN = process.env.AIRTABLE_WRITE_TOKEN ?? process.env.AIRTABLE_TOKEN!;
 
 // Optional columns without a known field ID on the read side. Set to the
 // Airtable field NAME or field ID. Left blank -> that value isn't written.

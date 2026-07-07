@@ -3,13 +3,17 @@
  *
  * Requires:
  *   RESEND_API_KEY       — from resend.com
- *   PARTNERS_FROM_EMAIL  — e.g. "Devx Staffing <invites@devxstaffing.com>"
- *                          (the domain must be verified in Resend / DNS)
+ *   PARTNERS_FROM_EMAIL  — e.g. "Devx Staffing <careers@interns.devxstaffing.com>"
+ *                          The domain must be verified in Resend / DNS AND the
+ *                          API key must be scoped to send from it. All outbound
+ *                          mail (invites, signup notices, denials) uses this one
+ *                          address, so it must be on the authorized domain.
  */
 import { Resend } from "resend";
 
 const FROM =
-  process.env.PARTNERS_FROM_EMAIL ?? "Devx Staffing <invites@devxstaffing.com>";
+  process.env.PARTNERS_FROM_EMAIL ??
+  "Devx Staffing <careers@interns.devxstaffing.com>";
 
 /** Where new-signup / approval notifications go. Override with ADMIN_NOTIFY_EMAIL. */
 const ADMIN_NOTIFY_EMAIL =
@@ -144,6 +148,77 @@ export async function sendCompanySignupNotification(
   return { ok: true };
 }
 
+export type CompanyApprovalEmail = {
+  to: string;
+  contactName: string | null;
+  companyName: string | null;
+  /** Absolute URL to the sign-in page. */
+  loginUrl: string;
+};
+
+/**
+ * Welcome an approved company in, with a link to sign in. Sent when an admin
+ * flips their company_users row to approved — this is the ONLY login invite a
+ * company gets (signup itself no longer emails a link). Best-effort: returns an
+ * error string instead of throwing so approval never fails on a mail hiccup.
+ */
+export async function sendCompanyApprovalEmail(
+  e: CompanyApprovalEmail
+): Promise<{ ok: boolean; error?: string }> {
+  if (!emailConfigured()) return { ok: false, error: "email-not-configured" };
+
+  const forCompany = e.companyName ? ` for ${e.companyName}` : "";
+  const textBody = [
+    greeting(e.contactName),
+    "",
+    `Good news — your Devx Staffing account${forCompany} has been approved.`,
+    "",
+    "You can now sign in and start browsing hand-vetted candidates:",
+    e.loginUrl,
+    "",
+    "Sign in with the same email you signed up with.",
+    "",
+    "— Devx Staffing",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html><body style="margin:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;"><tr><td align="center">
+    <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+      <tr><td style="background:linear-gradient(90deg,#1C75BC 0%,#4A4FD6 50%,#6637ED 100%);height:6px;"></td></tr>
+      <tr><td style="padding:32px;">
+        <p style="margin:0 0 16px;font-size:15px;color:#0f172a;">${greeting(
+          e.contactName
+        )}</p>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">
+          Good news — your Devx Staffing account${escapeHtml(
+            forCompany
+          )} has been <strong>approved</strong>. You can now sign in and start browsing hand-vetted candidates.
+        </p>
+        <a href="${escapeHtml(
+          e.loginUrl
+        )}" style="display:inline-block;background:linear-gradient(90deg,#1C75BC 0%,#4A4FD6 50%,#6637ED 100%);color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:10px;">Sign in to the portal</a>
+        <p style="margin:24px 0 0;font-size:13px;color:#94a3b8;">
+          Sign in with the same email you signed up with.
+        </p>
+      </td></tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} Devx Staffing</p>
+  </td></tr></table>
+</body></html>`;
+
+  const resend = client();
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: e.to,
+    subject: "You're approved — welcome to Devx Staffing",
+    html,
+    text: textBody,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export type StudentSignupNotice = {
   name: string | null;
   email: string;
@@ -211,6 +286,75 @@ export async function sendStudentSignupNotification(
     from: FROM,
     to: ADMIN_NOTIFY_EMAIL,
     subject: `New student: ${n.name || n.email} is waiting for review`,
+    html,
+    text: textBody,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export type StudentApprovalEmail = {
+  to: string;
+  firstName: string | null;
+  /** Absolute URL to the student sign-in page. */
+  loginUrl: string;
+};
+
+/**
+ * Tell a student their profile is approved and now visible to hiring companies,
+ * with a link to sign in and keep it up to date. Best-effort (never throws).
+ */
+export async function sendStudentApprovalEmail(
+  e: StudentApprovalEmail
+): Promise<{ ok: boolean; error?: string }> {
+  if (!emailConfigured()) return { ok: false, error: "email-not-configured" };
+
+  const textBody = [
+    greeting(e.firstName),
+    "",
+    "Great news — your Devx profile has been approved and is now live to hiring companies on the Devx talent platform.",
+    "",
+    "You can sign in anytime to keep your resume, projects, and details up to date:",
+    e.loginUrl,
+    "",
+    "Sign in with the same email you signed up with.",
+    "",
+    "— Devx Staffing",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html><body style="margin:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;"><tr><td align="center">
+    <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+      <tr><td style="background:linear-gradient(90deg,#1C75BC 0%,#4A4FD6 50%,#6637ED 100%);height:6px;"></td></tr>
+      <tr><td style="padding:32px;">
+        <p style="margin:0 0 16px;font-size:15px;color:#0f172a;">${greeting(
+          e.firstName
+        )}</p>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">
+          Great news — your Devx profile has been <strong>approved</strong> and is now
+          live to hiring companies on the Devx talent platform.
+        </p>
+        <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">
+          Sign in anytime to keep your resume, projects, and details up to date.
+        </p>
+        <a href="${escapeHtml(
+          e.loginUrl
+        )}" style="display:inline-block;background:linear-gradient(90deg,#1C75BC 0%,#4A4FD6 50%,#6637ED 100%);color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:10px;">Sign in to my profile</a>
+        <p style="margin:24px 0 0;font-size:13px;color:#94a3b8;">
+          Sign in with the same email you signed up with.
+        </p>
+      </td></tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} Devx Staffing</p>
+  </td></tr></table>
+</body></html>`;
+
+  const resend = client();
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: e.to,
+    subject: "You're approved — your Devx profile is live",
     html,
     text: textBody,
   });

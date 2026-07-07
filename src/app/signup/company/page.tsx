@@ -3,28 +3,39 @@
 import { createClient } from "@/lib/supabase/client";
 import { DevxLogo } from "@/components/Logo";
 import { registerCompany } from "../actions";
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function CompanySignupPage() {
+  const router = useRouter();
+  // Email comes from the signed-in session (captured at the sign-in step), not
+  // a form field — the questionnaire always runs after they're authenticated.
+  const [email, setEmail] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [workedWithDevx, setWorkedWithDevx] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function siteUrl() {
-    return process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-  }
+  // Require a session; a signed-out visitor is sent to the unified sign-in page.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) router.replace("/login");
+      else setEmail(user.email);
+    });
+  }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!email) return;
     setError(null);
     setLoading(true);
 
+    // Record the request and notify the team, then send them to the pending
+    // screen. No login link is emailed here — the sign-in invite goes out only
+    // when an admin approves them.
     const result = await registerCompany({
       fullName,
       companyName,
@@ -33,21 +44,11 @@ export default function CompanySignupPage() {
       workedWithDevx,
     });
     if (!result.ok) {
-      setError(result.error);
       setLoading(false);
+      setError(result.error);
       return;
     }
-
-    // Send a magic link so they can sign in — they'll land on the pending
-    // screen until David approves the company.
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${siteUrl()}/auth/callback` },
-    });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    router.replace("/pending");
   }
 
   return (
@@ -104,18 +105,16 @@ export default function CompanySignupPage() {
             your request and email you the moment you&apos;re approved.
           </p>
 
-          {sent ? (
-            <div className="mt-8 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-              <p className="font-medium">You&apos;re on the list — check your email</p>
-              <p className="mt-1 text-emerald-700">
-                We sent a sign-in link to{" "}
-                <span className="font-medium">{email}</span>. Open it to finish
-                setting up. Your account will be reviewed before you can browse
-                candidates.
-              </p>
-            </div>
+          {email === null ? (
+            <p className="mt-8 text-sm text-slate-400">Loading…</p>
           ) : (
             <form onSubmit={onSubmit} className="mt-8 space-y-3">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                <span className="text-xs font-medium text-slate-500">
+                  Signed in as
+                </span>
+                <div className="font-medium text-slate-800">{email}</div>
+              </div>
               <Field
                 label="Full name"
                 value={fullName}
@@ -131,14 +130,6 @@ export default function CompanySignupPage() {
                 required
               />
               <Field
-                label="Work email"
-                value={email}
-                onChange={setEmail}
-                placeholder="you@acme.com"
-                type="email"
-                required
-              />
-              <Field
                 label="Phone"
                 value={phone}
                 onChange={setPhone}
@@ -147,36 +138,39 @@ export default function CompanySignupPage() {
                 required
               />
 
-              <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <input
-                  type="checkbox"
-                  checked={workedWithDevx}
-                  onChange={(e) => setWorkedWithDevx(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-                />
-                <span className="text-sm text-slate-600">
-                  I&apos;ve worked with Devx Staffing before
-                </span>
-              </label>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <label className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={workedWithDevx}
+                    onChange={(e) => setWorkedWithDevx(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                  />
+                  <span className="text-sm font-medium text-slate-700">
+                    I&apos;ve worked with Devx Staffing before
+                  </span>
+                </label>
+                <p className="mt-1.5 pl-[26px] text-xs leading-relaxed text-slate-500">
+                  This portal is for Devx Staffing clients — but becoming one is{" "}
+                  <span className="font-medium text-slate-600">
+                    completely free, with no obligation
+                  </span>
+                  . Existing clients are approved fastest; if you&apos;re new,
+                  just leave this unchecked and we&apos;ll get you set up.
+                </p>
+              </div>
 
               <button
                 type="submit"
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
-                {loading ? "Submitting…" : "Create free account"}
+                {loading ? "Submitting…" : "Submit for approval"}
               </button>
             </form>
           )}
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-          <p className="mt-6 text-sm text-slate-500">
-            Already have access?{" "}
-            <Link href="/login" className="font-medium text-brand hover:underline">
-              Sign in
-            </Link>
-          </p>
         </div>
       </section>
     </main>

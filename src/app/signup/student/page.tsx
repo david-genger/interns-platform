@@ -2,21 +2,26 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { DevxLogo } from "@/components/Logo";
-import { registerStudent } from "../actions";
-import { useState } from "react";
-import Link from "next/link";
+import { registerStudent, getSchoolOptions } from "../actions";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const REMOTE_OPTIONS = ["Remote", "Hybrid", "On-site", "Flexible"];
+const OTHER = "__other__";
 
 export default function StudentSignupPage() {
+  const router = useRouter();
+  // Email comes from the signed-in session (captured at the sign-in step).
+  const [email, setEmail] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [remote, setRemote] = useState("");
   const [grad, setGrad] = useState("");
-  const [school, setSchool] = useState("");
+  const [schoolChoice, setSchoolChoice] = useState("");
+  const [schoolOther, setSchoolOther] = useState("");
+  const [schools, setSchools] = useState<string[]>([]);
   const [tech, setTech] = useState("");
   const [linkedin, setLinkedin] = useState("");
   const [resume, setResume] = useState<File | null>(null);
@@ -24,12 +29,17 @@ export default function StudentSignupPage() {
   const [projects, setProjects] = useState<string[]>([""]);
 
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function siteUrl() {
-    return process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-  }
+  // Require a session; a signed-out visitor is sent to the unified sign-in page.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) router.replace("/login");
+      else setEmail(user.email);
+    });
+    getSchoolOptions().then(setSchools).catch(() => setSchools([]));
+  }, [router]);
 
   function setProject(i: number, v: string) {
     setProjects((p) => p.map((x, idx) => (idx === i ? v : x)));
@@ -43,12 +53,14 @@ export default function StudentSignupPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!email) return;
     setError(null);
 
     if (!resume) {
       setError("Please attach your resume (PDF).");
       return;
     }
+    const school = schoolChoice === OTHER ? schoolOther.trim() : schoolChoice;
     setLoading(true);
 
     const fd = new FormData();
@@ -75,15 +87,9 @@ export default function StudentSignupPage() {
       return;
     }
 
-    // Send a magic link so they can sign in and manage their profile.
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${siteUrl()}/auth/callback?next=/student` },
-    });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    // Already signed in — no magic link needed. Send them to their dashboard
+    // where they can keep editing while we review the profile.
+    router.replace("/student");
   }
 
   return (
@@ -129,22 +135,20 @@ export default function StudentSignupPage() {
             live to companies — you can keep editing it anytime.
           </p>
 
-          {sent ? (
-            <div className="mt-8 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-              <p className="font-medium">You&apos;re in — check your email</p>
-              <p className="mt-1 text-emerald-700">
-                We sent a sign-in link to{" "}
-                <span className="font-medium">{email}</span>. Open it to manage
-                your profile and projects while we review your submission.
-              </p>
-            </div>
+          {email === null ? (
+            <p className="mt-8 text-sm text-slate-400">Loading…</p>
           ) : (
             <form onSubmit={onSubmit} className="mt-8 space-y-3">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                <span className="text-xs font-medium text-slate-500">
+                  Signed in as
+                </span>
+                <div className="font-medium text-slate-800">{email}</div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="First name" value={firstName} onChange={setFirstName} required />
                 <Field label="Last name" value={lastName} onChange={setLastName} />
               </div>
-              <Field label="Email" value={email} onChange={setEmail} type="email" required placeholder="you@email.com" />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="City" value={city} onChange={setCity} />
                 <Field label="State" value={state} onChange={setState} />
@@ -169,7 +173,33 @@ export default function StudentSignupPage() {
                 </label>
                 <Field label="Expected graduation" value={grad} onChange={setGrad} type="date" />
               </div>
-              <Field label="School / bootcamp" value={school} onChange={setSchool} placeholder="e.g. General Assembly" />
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-slate-600">
+                  School / bootcamp
+                </span>
+                <select
+                  value={schoolChoice}
+                  onChange={(e) => setSchoolChoice(e.target.value)}
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30"
+                >
+                  <option value="">Select…</option>
+                  {schools.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other (not listed)</option>
+                </select>
+              </label>
+              {schoolChoice === OTHER && (
+                <Field
+                  label="Your school / bootcamp"
+                  value={schoolOther}
+                  onChange={setSchoolOther}
+                  placeholder="e.g. General Assembly"
+                  required
+                />
+              )}
               <Field
                 label="Skills (comma-separated)"
                 value={tech}
@@ -242,19 +272,12 @@ export default function StudentSignupPage() {
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
-                {loading ? "Submitting…" : "Create my profile"}
+                {loading ? "Submitting…" : "Submit for review"}
               </button>
             </form>
           )}
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-          <p className="mt-6 text-sm text-slate-500">
-            Already applied?{" "}
-            <Link href="/student/login" className="font-medium text-brand hover:underline">
-              Sign in
-            </Link>
-          </p>
         </div>
       </section>
     </main>

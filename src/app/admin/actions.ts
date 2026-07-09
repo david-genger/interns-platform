@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   sendStudentDenialEmail,
-  sendStudentApprovalEmail,
+  // sendStudentApprovalEmail, // disabled until the student portal launches (see setCandidateReview)
   sendCompanyApprovalEmail,
 } from "@/lib/email";
 import { runSync, type SyncMode, type SyncResult } from "@/lib/sync";
@@ -253,16 +253,21 @@ export async function setCandidateReview(
     if (!ok && mailErr !== "email-not-configured") {
       console.error("[admin:denyCandidate:email]", mailErr);
     }
-  } else if (status === "approved" && updated?.email) {
-    const { ok, error: mailErr } = await sendStudentApprovalEmail({
-      to: updated.email,
-      firstName: updated.first_name ?? null,
-      loginUrl: `${siteBase()}/student/login`,
-    });
-    if (!ok && mailErr !== "email-not-configured") {
-      console.error("[admin:approveCandidate:email]", mailErr);
-    }
   }
+  // Approval email intentionally disabled for now: the student login section
+  // isn't tested yet, and approved candidates shouldn't be told a login is
+  // coming. They still apply via Airtable and sync over as usual. Re-enable
+  // this block once the student portal is ready to launch.
+  // else if (status === "approved" && updated?.email) {
+  //   const { ok, error: mailErr } = await sendStudentApprovalEmail({
+  //     to: updated.email,
+  //     firstName: updated.first_name ?? null,
+  //     loginUrl: `${siteBase()}/student/login`,
+  //   });
+  //   if (!ok && mailErr !== "email-not-configured") {
+  //     console.error("[admin:approveCandidate:email]", mailErr);
+  //   }
+  // }
 
   revalidatePath(CANDIDATES_PATH);
   return { ok: true };

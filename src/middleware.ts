@@ -3,20 +3,40 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
+/**
+ * Redirect while preserving any auth cookies Supabase refreshed onto `base`.
+ * A bare NextResponse.redirect() starts from an empty cookie jar, so a rotated
+ * session token written during getUser() would be lost — leaving the browser
+ * and server out of sync and logging the user out prematurely.
+ */
+function redirectWithCookies(
+  request: NextRequest,
+  base: NextResponse,
+  pathname: string
+) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  const redirect = NextResponse.redirect(url);
+  base.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+  return redirect;
+}
+
+// Paths anyone can reach without a per-portal approval check. The "pending"
+// pages are deliberately NOT listed here — they're gated inside each portal
+// block below so that an approved user who lands on (or refreshes) a pending
+// page is sent straight into the app, instead of being stuck there until they
+// navigate away or sign in again.
 const PUBLIC_PATHS = [
   "/login",
-  "/pending",
   "/auth",
   // Public self-serve signup (account-type chooser + company signup form).
   "/signup",
   // Partners portal public entry points + the public student invite pages.
   "/partners/login",
   "/partners/signup",
-  "/partners/pending",
   "/invite",
   // Student portal public entry points.
   "/student/login",
-  "/student/pending",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -71,10 +91,9 @@ export async function middleware(request: NextRequest) {
   // ----- Partners portal: gate on partner_users -----
   if (isPartners) {
     if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/partners/login";
-      return NextResponse.redirect(url);
+      return redirectWithCookies(request, response, "/partners/login");
     }
+    const onPending = path === "/partners/pending";
     const { data: partnerUser } = await supabase
       .from("partner_users")
       .select("approved")
@@ -82,9 +101,15 @@ export async function middleware(request: NextRequest) {
       .maybeSingle();
 
     if (!partnerUser?.approved) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/partners/pending";
-      return NextResponse.redirect(url);
+      // Not approved yet: let the pending page render; bounce everything else.
+      return onPending
+        ? response
+        : redirectWithCookies(request, response, "/partners/pending");
+    }
+    // Approved: don't strand them on the pending page (e.g. after refreshing
+    // it once their program was approved) — send them into the portal.
+    if (onPending) {
+      return redirectWithCookies(request, response, "/partners");
     }
     return response;
   }
@@ -97,10 +122,9 @@ export async function middleware(request: NextRequest) {
   const isStudent = path === "/student" || path.startsWith("/student/");
   if (isStudent) {
     if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/student/login";
-      return NextResponse.redirect(url);
+      return redirectWithCookies(request, response, "/student/login");
     }
+    const onPending = path === "/student/pending";
     const { data: internRow } = await supabase
       .from("interns")
       .select("id")
@@ -108,20 +132,24 @@ export async function middleware(request: NextRequest) {
       .maybeSingle();
 
     if (!internRow) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/student/pending";
-      return NextResponse.redirect(url);
+      // No matching profile yet: let the pending page render; bounce the rest.
+      return onPending
+        ? response
+        : redirectWithCookies(request, response, "/student/pending");
+    }
+    // Profile now exists (e.g. after a sync): don't strand them on pending.
+    if (onPending) {
+      return redirectWithCookies(request, response, "/student");
     }
     return response;
   }
 
   // ----- Company portal (default): gate on company_users -----
   if (!user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectWithCookies(request, response, "/login");
   }
 
+  const onPending = path === "/pending";
   const { data: membership } = await supabase
     .from("company_users")
     .select("approved, role")
@@ -129,9 +157,15 @@ export async function middleware(request: NextRequest) {
     .maybeSingle();
 
   if (!membership?.approved) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/pending";
-    return NextResponse.redirect(url);
+    // Not approved yet: let the pending page render; bounce everything else.
+    return onPending
+      ? response
+      : redirectWithCookies(request, response, "/pending");
+  }
+  // Approved: don't strand them on the pending page after being approved +
+  // refreshing — send them into the app.
+  if (onPending) {
+    return redirectWithCookies(request, response, "/interns");
   }
 
   // Admin section is admins-only. Approved non-admins get bounced to /interns.
@@ -139,9 +173,7 @@ export async function middleware(request: NextRequest) {
   // gate; this is a fast first line of defense.)
   if (path === "/admin" || path.startsWith("/admin/")) {
     if (membership.role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/interns";
-      return NextResponse.redirect(url);
+      return redirectWithCookies(request, response, "/interns");
     }
   }
 

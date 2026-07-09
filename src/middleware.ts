@@ -7,6 +7,8 @@ const PUBLIC_PATHS = [
   "/login",
   "/pending",
   "/auth",
+  // Public self-serve signup (account-type chooser + company signup form).
+  "/signup",
   // Partners portal public entry points + the public student invite pages.
   "/partners/login",
   "/partners/signup",

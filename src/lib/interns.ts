@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Intern, InternFilters } from "@/lib/types";
+import type { Intern, InternFilters, InternProject } from "@/lib/types";
 
 const COLUMNS =
-  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, email, phone, profile_image_url, resume_path, airtable_modified_at, last_synced_at";
+  "id, airtable_id, name, first_name, last_name, headline, summary, technologies, tech_categories, intern_year, expected_graduation, educational_institution, location, city, state, country, remote_preference, email, phone, linkedin_url, profile_image_url, resume_path, review_status, reviewed_at, reviewed_by, review_note, airtable_modified_at, last_synced_at";
+
+const PROJECT_COLUMNS = "id, intern_id, url, title, sort_order, created_at";
 
 /** List interns for the logged-in (approved) user. RLS enforces access. */
 export async function getInterns(filters: InternFilters): Promise<Intern[]> {
@@ -82,6 +84,28 @@ export async function getMyIntern(): Promise<Intern | null> {
     .eq("email", user.email.toLowerCase())
     .maybeSingle();
   return (data as Intern) ?? null;
+}
+
+/**
+ * Read an intern's published projects. RLS limits this to APPROVED interns for
+ * company users, so a pending candidate's links never leak. Ordered for display.
+ */
+export async function getProjects(internId: string): Promise<InternProject[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("intern_projects")
+    .select(PROJECT_COLUMNS)
+    .eq("intern_id", internId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  return (data ?? []) as InternProject[];
+}
+
+/** Read the logged-in student's OWN projects (RLS "student reads own projects"). */
+export async function getMyProjects(): Promise<InternProject[]> {
+  const intern = await getMyIntern();
+  if (!intern) return [];
+  return getProjects(intern.id);
 }
 
 /** Mint a short-lived signed URL for the logged-in student's own resume. */

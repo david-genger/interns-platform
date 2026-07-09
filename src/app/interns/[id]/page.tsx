@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { InternProfile } from "@/components/InternProfile";
-import { getIntern } from "@/lib/interns";
+import { getIntern, getProjects } from "@/lib/interns";
 
 // Full-page profile: direct load / refresh / shared link of /interns/[id].
 export default async function InternPage({
@@ -11,6 +11,7 @@ export default async function InternPage({
 }) {
   const intern = await getIntern(params.id);
   if (!intern) notFound();
+  const projects = await getProjects(intern.id);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -21,7 +22,7 @@ export default async function InternPage({
         ← Back to interns
       </Link>
       <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-        <InternProfile intern={intern} />
+        <InternProfile intern={intern} projects={projects} />
       </div>
     </div>
   );

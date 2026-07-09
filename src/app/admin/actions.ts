@@ -1,19 +1,37 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  sendStudentDenialEmail,
+  sendStudentApprovalEmail,
+  sendCompanyApprovalEmail,
+} from "@/lib/email";
 import { runSync, type SyncMode, type SyncResult } from "@/lib/sync";
+import type { ReviewStatus } from "@/lib/types";
 
 export type ActionResult = { ok: boolean; error?: string };
 
 const USERS_PATH = "/admin/users";
 const COMPANIES_PATH = "/admin/companies";
+const CANDIDATES_PATH = "/admin/candidates";
 
 /** Log the real DB error, return a generic message (no schema leakage). */
 function safeError(context: string, err: unknown): string {
   console.error(`[admin:${context}]`, err);
   return "Something went wrong. Please try again.";
+}
+
+/** Absolute base URL for links in outbound email (prefers the configured site URL). */
+function siteBase(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  const h = headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
 }
 
 // ------------------------------------------------------------------
@@ -61,11 +79,37 @@ export async function setUserApproved(
 ): Promise<ActionResult> {
   await requireAdmin();
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("company_users")
     .update({ approved })
-    .eq("id", id);
+    .eq("id", id)
+    .select("email, full_name, company_id")
+    .single();
   if (error) return { ok: false, error: safeError("write", error) };
+
+  // On approval, welcome them in with a sign-in link. Best-effort — never fail
+  // the approval if the email can't be sent.
+  if (approved && updated?.email) {
+    let companyName: string | null = null;
+    if (updated.company_id) {
+      const { data: c } = await admin
+        .from("companies")
+        .select("name")
+        .eq("id", updated.company_id)
+        .maybeSingle();
+      companyName = (c?.name as string) ?? null;
+    }
+    const { ok, error: mailErr } = await sendCompanyApprovalEmail({
+      to: updated.email as string,
+      contactName: (updated.full_name as string) ?? null,
+      companyName,
+      loginUrl: `${siteBase()}/login`,
+    });
+    if (!ok && mailErr !== "email-not-configured") {
+      console.error("[admin:approveCompany:email]", mailErr);
+    }
+  }
+
   revalidatePath(USERS_PATH);
   return { ok: true };
 }
@@ -161,6 +205,66 @@ export async function deleteCompany(id: string): Promise<ActionResult> {
   if (error) return { ok: false, error: safeError("write", error) };
   revalidatePath(COMPANIES_PATH);
   revalidatePath(USERS_PATH);
+  return { ok: true };
+}
+
+// ------------------------------------------------------------------
+// Candidates (interns) review
+// ------------------------------------------------------------------
+
+/**
+ * Set a candidate's review status. 'approved' makes them visible to companies;
+ * 'denied' / 'pending' hide them. The decision lives on the intern row and is
+ * preserved across every sync (the sync upsert never lists these columns), so
+ * denials stay put and remain visible under the admin Denied filter.
+ */
+export async function setCandidateReview(
+  id: string,
+  status: ReviewStatus,
+  note?: string | null
+): Promise<ActionResult> {
+  const email = await requireAdmin();
+  if (status !== "pending" && status !== "approved" && status !== "denied") {
+    return { ok: false, error: "Invalid status." };
+  }
+
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
+    .from("interns")
+    .update({
+      review_status: status,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: email,
+      // Only touch the note when one is explicitly provided.
+      ...(note !== undefined ? { review_note: note?.trim() || null } : {}),
+    })
+    .eq("id", id)
+    .select("email, first_name, review_status")
+    .single();
+  if (error) return { ok: false, error: safeError("setCandidateReview", error) };
+
+  // Notify the candidate of the decision. Best-effort — never fail the review
+  // action if the email can't be sent.
+  if (status === "denied" && updated?.email) {
+    const { ok, error: mailErr } = await sendStudentDenialEmail({
+      to: updated.email,
+      firstName: updated.first_name ?? null,
+    });
+    if (!ok && mailErr !== "email-not-configured") {
+      console.error("[admin:denyCandidate:email]", mailErr);
+    }
+  } else if (status === "approved" && updated?.email) {
+    const { ok, error: mailErr } = await sendStudentApprovalEmail({
+      to: updated.email,
+      firstName: updated.first_name ?? null,
+      loginUrl: `${siteBase()}/student/login`,
+    });
+    if (!ok && mailErr !== "email-not-configured") {
+      console.error("[admin:approveCandidate:email]", mailErr);
+    }
+  }
+
+  revalidatePath(CANDIDATES_PATH);
   return { ok: true };
 }
 

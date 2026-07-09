@@ -17,7 +17,11 @@ import { FIELD } from "@/lib/airtable";
 
 const BASE = process.env.AIRTABLE_BASE_ID!;
 const TABLE = process.env.AIRTABLE_TABLE_ID!;
-const TOKEN = process.env.AIRTABLE_TOKEN!;
+// Creating records needs WRITE scope. AIRTABLE_TOKEN is the read-only sync
+// token, so prefer the write-scoped token (same one airtable.ts uses for the
+// resume write-back); fall back to AIRTABLE_TOKEN only if a single token carries
+// both scopes.
+const TOKEN = process.env.AIRTABLE_WRITE_TOKEN ?? process.env.AIRTABLE_TOKEN!;
 
 // Optional columns without a known field ID on the read side. Set to the
 // Airtable field NAME or field ID. Left blank -> that value isn't written.
@@ -37,6 +41,15 @@ export type NewStudentRecord = {
   school: string | null; // partner / bootcamp name
   /** Publicly fetchable URL Airtable can pull the resume from (short-lived ok). */
   resumeUrl: string | null;
+  linkedInUrl?: string | null;
+  /** Publicly fetchable URL Airtable snapshots into the Profile Image field. */
+  profileImageUrl?: string | null;
+  /**
+   * Cohort label. Partner invites leave this UNSET so the record stays hidden
+   * until vetted; the self-serve signup sets the current year so the sync
+   * ingests it and the admin review gate takes over.
+   */
+  internYear?: string | null;
 };
 
 /**
@@ -63,8 +76,11 @@ export async function createLocalTalentRecord(
   if (r.remotePreference) fields[FIELD.remotePreference] = r.remotePreference;
   if (r.expectedGraduation) fields[FIELD.expectedGraduation] = r.expectedGraduation;
   if (r.school) fields[FIELD.educationalInstitution] = r.school;
+  if (r.linkedInUrl) fields[FIELD.linkedin] = r.linkedInUrl;
+  if (r.internYear) fields[FIELD.internYear] = r.internYear;
 
   if (r.resumeUrl) fields[FIELD.resume] = [{ url: r.resumeUrl }];
+  if (r.profileImageUrl) fields[FIELD.profileImage] = [{ url: r.profileImageUrl }];
 
   if (EMAIL_FIELD) fields[EMAIL_FIELD] = r.email;
   if (SOURCE_FIELD && r.school) fields[SOURCE_FIELD] = r.school;

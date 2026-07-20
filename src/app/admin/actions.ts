@@ -11,6 +11,8 @@ import {
 } from "@/lib/email";
 import { runSync, type SyncMode, type SyncResult } from "@/lib/sync";
 import type { ReviewStatus } from "@/lib/types";
+import { trackServer } from "@/lib/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -269,6 +271,7 @@ export async function setCandidateReview(
   }
 
   revalidatePath(CANDIDATES_PATH);
+  await trackServer(EVENTS.candidateReviewed, { status });
   return { ok: true };
 }
 

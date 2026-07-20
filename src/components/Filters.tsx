@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useTransition } from "react";
+import { track } from "@vercel/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 type Facets = {
   technologies: string[];
@@ -20,6 +22,11 @@ export function Filters({ facets }: { facets: Facets }) {
       const next = new URLSearchParams(params.toString());
       if (value) next.set(key, value);
       else next.delete(key);
+      // Track applied facet filters (not every keystroke in the name search) so
+      // we can see what companies actually filter interns by.
+      if (key !== "q" && value) {
+        track(EVENTS.internsFiltered, { filter: key, value });
+      }
       startTransition(() => {
         router.replace(`/interns?${next.toString()}`, { scroll: false });
       });

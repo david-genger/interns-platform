@@ -6,6 +6,8 @@ import { getMyIntern } from "@/lib/interns";
 import { updateInternFields } from "@/lib/airtable";
 import { normalizeLiveUrl } from "@/lib/url";
 import { normalizePhone } from "@/lib/phone";
+import { trackServer } from "@/lib/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 export type ActionResult = { ok: boolean; error?: string; warning?: string };
 
@@ -92,6 +94,9 @@ export async function updateProfile(formData: FormData): Promise<ActionResult> {
   }
 
   revalidatePath(DASHBOARD);
+  await trackServer(EVENTS.studentProfileUpdated, {
+    airtable_write_failed: Boolean(warning),
+  });
   return { ok: true, warning };
 }
 
@@ -122,6 +127,7 @@ export async function addProject(url: string): Promise<ActionResult> {
   if (error) return { ok: false, error: safeError("addProject", error) };
 
   revalidatePath(DASHBOARD);
+  await trackServer(EVENTS.studentProjectAdded);
   return { ok: true };
 }
 

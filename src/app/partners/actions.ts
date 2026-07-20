@@ -12,6 +12,8 @@ import {
 } from "@/lib/rosters";
 import { revalidatePath } from "next/cache";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { trackServer } from "@/lib/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 export type { AddStudentsResult, SendInvitesResult };
 
@@ -55,7 +57,10 @@ export async function addStudents(
     return { ok: false, added: 0, skipped: 0, error: (e as Error).message };
   }
   const res = await addStudentsToRoster(partnerId, rows);
-  if (res.ok) revalidatePath("/partners");
+  if (res.ok) {
+    revalidatePath("/partners");
+    await trackServer(EVENTS.partnerRosterUploaded, { added: res.added });
+  }
   return res;
 }
 
@@ -68,7 +73,10 @@ export async function sendInvites(): Promise<SendInvitesResult> {
     return { ok: false, sent: 0, failed: 0, error: (e as Error).message };
   }
   const res = await sendPartnerInvites(partnerId);
-  if (res.ok) revalidatePath("/partners");
+  if (res.ok) {
+    revalidatePath("/partners");
+    await trackServer(EVENTS.partnerInvitesSent, { sent: res.sent });
+  }
   return res;
 }
 
@@ -158,6 +166,8 @@ export async function registerPartner(input: {
     role: "staff",
   });
   if (userErr) return { ok: false, error: safeError("registerPartner:user", userErr) };
+
+  await trackServer(EVENTS.partnerSignup);
 
   return { ok: true };
 }

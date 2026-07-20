@@ -16,6 +16,8 @@ import { normalizePhone } from "@/lib/phone";
 import { resolvePartnerId } from "@/lib/partner-resolve";
 import { linkRosterOnSignup } from "@/lib/rosters";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { trackServer } from "@/lib/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 export type RegisterResult = { ok: true } | { ok: false; error: string };
 
@@ -147,6 +149,10 @@ export async function registerCompany(
   if (!ok && error !== "email-not-configured") {
     console.error("[signup:notify]", error);
   }
+
+  await trackServer(EVENTS.companySignup, {
+    worked_with_devx: input.workedWithDevx,
+  });
 
   return { ok: true };
 }
@@ -495,6 +501,12 @@ export async function registerStudent(
       console.error("[signup:notify-student]", error);
     }
   }
+
+  await trackServer(EVENTS.studentSignup, {
+    via_invite: Boolean(inviteToken),
+    returning: Boolean(existingAirtableId),
+    school: school ?? "unspecified",
+  });
 
   return { ok: true };
 }

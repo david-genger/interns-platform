@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getMyIntern, getMyResumeSignedUrl } from "@/lib/interns";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { updateResumeAttachment } from "@/lib/airtable";
+import { trackServer } from "@/lib/analytics";
+import { EVENTS } from "@/lib/analytics-events";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +94,10 @@ export async function POST(request: Request) {
     warning = "airtable-write-failed";
     console.error(`resume Airtable write-back failed for ${intern.airtable_id}:`, e);
   }
+
+  await trackServer(EVENTS.studentResumeUpdated, {
+    airtable_write_failed: Boolean(warning),
+  });
 
   return NextResponse.json({ ok: true, warning });
 }

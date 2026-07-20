@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 // Halyard Display — the Devx brand display face, used for headings only.
@@ -50,7 +51,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={halyard.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

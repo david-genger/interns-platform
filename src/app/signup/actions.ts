@@ -13,6 +13,7 @@ import {
 import { findLocalTalentRecord } from "@/lib/airtable";
 import { normalizeLiveUrl } from "@/lib/url";
 import { normalizePhone } from "@/lib/phone";
+import { resolvePartnerId } from "@/lib/partner-resolve";
 import { linkRosterOnSignup } from "@/lib/rosters";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
@@ -209,8 +210,7 @@ export async function registerStudent(
   const state = str(formData.get("state"));
   const remotePreference = str(formData.get("remote_preference"));
   const expectedGraduation = str(formData.get("expected_graduation"));
-  const partnerIdInput = str(formData.get("partner_id"));
-  const schoolInput = str(formData.get("school"));
+  const school = str(formData.get("school"));
   const linkedInUrl = str(formData.get("linkedin_url"));
   const inviteToken = str(formData.get("invite_token"));
   const technologies = parseTech(formData.get("technologies"));
@@ -272,22 +272,11 @@ export async function registerStudent(
 
   const admin = createAdminClient();
 
-  // Resolve the school to a canonical partner when one was picked, so the
-  // candidate is linked by id (not a drifting name string). "Other" / free text
-  // keeps the name with no partner link.
-  let partnerId: string | null = null;
-  let school = schoolInput;
-  if (partnerIdInput) {
-    const { data: partner } = await admin
-      .from("partners")
-      .select("id, name")
-      .eq("id", partnerIdInput)
-      .maybeSingle();
-    if (partner) {
-      partnerId = partner.id as string;
-      school = (partner.name as string) ?? schoolInput;
-    }
-  }
+  // Resolve-or-create the canonical partner from the school name — the SAME
+  // mechanism the sync uses. Whether the student picked from the list or typed
+  // an "Other" school, it ends up in the one partners list and the candidate is
+  // linked by id (not a drifting name string).
+  const partnerId = await resolvePartnerId(admin, school);
 
   // ---- DEDUPE: find an existing record by EMAIL (never phone — see above). ----
   // 1) Supabase first (indexed) — covers anyone already synced or materialized.

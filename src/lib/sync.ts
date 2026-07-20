@@ -5,6 +5,7 @@ import {
   mapRecord,
   type AirtableAttachment,
 } from "@/lib/airtable";
+import { resolvePartnerId } from "@/lib/partner-resolve";
 
 export type SyncMode = "hourly" | "daily" | "backfill";
 
@@ -70,6 +71,10 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
   const records = await fetchInterns(WINDOW_HOURS[mode]);
   let upserted = 0;
 
+  // Cache school → partner id for this run so a cohort of students from the same
+  // school resolves the partner once, not once per record.
+  const partnerCache = new Map<string, string | null>();
+
   // Pull existing modified timestamps so we can skip unchanged rows and avoid
   // needless attachment re-hosting.
   const ids = records.map((r) => r.id);
@@ -101,9 +106,19 @@ export async function runSync(mode: SyncMode): Promise<SyncResult> {
         rehost("resumes", rec.id, resume),
       ]);
 
+      // Ensure this student's school exists as a partner and link it — so a
+      // school first appearing in Airtable shows up in the partners list on the
+      // very next sync, with no separate reconciling step.
+      const partner_id = await resolvePartnerId(
+        admin,
+        row.educational_institution,
+        partnerCache
+      );
+
       const { error } = await admin.from("interns").upsert(
         {
           ...row,
+          partner_id,
           profile_image_url,
           resume_path,
           last_synced_at: new Date().toISOString(),

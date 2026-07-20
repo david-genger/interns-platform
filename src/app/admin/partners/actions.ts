@@ -109,3 +109,24 @@ export async function adminSetPartnerStaffApproved(
   revalidatePath(LIST_PATH);
   return { ok: true };
 }
+
+/**
+ * Assign a staff account to a specific bootcamp / college org — how David hands
+ * a signed-up staffer the exact list he's been managing. Their portal is scoped
+ * by this partner_id (RLS `current_partner_id`), so they immediately manage that
+ * org's roster and history. Pass null to unassign.
+ */
+export async function adminSetPartnerStaffPartner(
+  id: string,
+  partnerId: string | null
+): Promise<ActionResult> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("partner_users")
+    .update({ partner_id: partnerId })
+    .eq("id", id);
+  if (error) return { ok: false, error: safeError("assignStaff", error) };
+  revalidatePath(LIST_PATH);
+  return { ok: true };
+}

@@ -108,7 +108,10 @@ export default async function AdminPartnersPage() {
             their org.
           </p>
         </div>
-        <PartnerStaffApprovals staff={staff} />
+        <PartnerStaffApprovals
+          staff={staff}
+          partners={partners.map((p) => ({ id: p.id, name: p.name }))}
+        />
       </section>
     </div>
   );

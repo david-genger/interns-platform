@@ -6,8 +6,14 @@ import {
   sendCompanySignupNotification,
   sendStudentSignupNotification,
 } from "@/lib/email";
-import { createLocalTalentRecord } from "@/lib/airtable-write";
+import {
+  createLocalTalentRecord,
+  updateLocalTalentRecord,
+} from "@/lib/airtable-write";
+import { findLocalTalentRecord } from "@/lib/airtable";
 import { normalizeLiveUrl } from "@/lib/url";
+import { normalizePhone } from "@/lib/phone";
+import { linkRosterOnSignup } from "@/lib/rosters";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export type RegisterResult = { ok: true } | { ok: false; error: string };
@@ -27,29 +33,24 @@ function safeError(
   return userMsg;
 }
 
+export type SchoolOption = { id: string; name: string };
+
 /**
- * Known bootcamps / colleges for the student signup dropdown, sourced from data
- * we already have: registered partner orgs + every school already on a candidate
- * record. De-duplicated (case-insensitive) and alphabetised. The form adds an
- * "Other" option on top, so the list grows itself as new schools come through.
+ * Bootcamps / colleges for the student signup dropdown — the single canonical
+ * `partners` list that the partners portal, admin console, and interns filters
+ * all share, so the name a student picks is always tied to a real partner id.
+ * The form adds an "Other" option for schools not yet in the list (stored as
+ * free text with no partner link; an admin can attach them to an org later).
  */
-export async function getSchoolOptions(): Promise<string[]> {
+export async function getSchoolOptions(): Promise<SchoolOption[]> {
   const admin = createAdminClient();
-  const [partnersRes, internsRes] = await Promise.all([
-    admin.from("partners").select("name"),
-    admin.from("interns").select("educational_institution"),
-  ]);
-
-  const byLower = new Map<string, string>();
-  const add = (v: unknown) => {
-    const s = typeof v === "string" ? v.trim() : "";
-    if (s && !byLower.has(s.toLowerCase())) byLower.set(s.toLowerCase(), s);
-  };
-  for (const p of partnersRes.data ?? []) add((p as { name: string }).name);
-  for (const i of internsRes.data ?? [])
-    add((i as { educational_institution: string | null }).educational_institution);
-
-  return [...byLower.values()].sort((a, b) => a.localeCompare(b));
+  const { data } = await admin
+    .from("partners")
+    .select("id, name")
+    .order("name", { ascending: true });
+  return (data ?? [])
+    .map((p) => ({ id: p.id as string, name: (p.name as string) ?? "" }))
+    .filter((p) => p.name);
 }
 
 /** Absolute base URL (prefers the configured site URL). */
@@ -161,17 +162,36 @@ const PHOTO_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-/** Cohort label written to Airtable so the record syncs in as a current intern. */
+/**
+ * Cohort label written to Airtable so the record syncs in as a current intern.
+ * Always the CURRENT calendar year — deliberately not configurable, so it can
+ * never be pinned to a stale value and silently mislabel next year's cohort.
+ */
 function defaultInternYear(): string {
-  return process.env.AIRTABLE_DEFAULT_INTERN_YEAR ?? String(new Date().getFullYear());
+  return String(new Date().getFullYear());
 }
 
 /**
- * Self-serve STUDENT signup. Unlike the partner invite (which leaves the record
- * unvetted), this sets Intern Year so the sync ingests it — the internal review
- * gate (`review_status`) then decides visibility. The record is written to
- * Airtable (the source of truth) AND materialized locally right away, so the
- * student can sign in and manage their projects before the next scheduled sync.
+ * THE single student intake path. Every student — direct signup or bootcamp
+ * invite — comes through here, so the rules, validation, and dedupe are shared.
+ * The invite is just a funnel: it prefills email + school and passes an
+ * `invite_token` so we can update the roster funnel on completion.
+ *
+ * Sets Intern Year so the sync ingests the record; the internal review gate
+ * (`review_status`) then decides visibility. Writes Airtable (source of truth)
+ * AND materializes the Supabase row immediately so the student can sign in and
+ * manage their profile before the next scheduled sync.
+ *
+ * DEDUPE: matches an existing candidate by EMAIL — first in Supabase (indexed,
+ * instant), then via one Airtable query for records not yet synced. On a match
+ * it UPDATES that record instead of creating a duplicate, then upserts the
+ * Supabase row on the SAME airtable_id — so from here on every future Airtable
+ * edit for this person flows to the platform through the normal sync.
+ * Deliberately email-only: phone is a contact field, not a merge key — merging
+ * on a phone match would let a signup with someone else's number overwrite that
+ * person's record (and its email, the login key) from a public endpoint.
+ * Intern Year is only set when the matched record doesn't already have one, so
+ * a merge never moves an existing candidate to a different cohort.
  */
 export async function registerStudent(
   formData: FormData
@@ -184,18 +204,26 @@ export async function registerStudent(
   const email = str(formData.get("email"))?.toLowerCase() ?? "";
   const firstName = str(formData.get("first_name"));
   const lastName = str(formData.get("last_name"));
+  const phoneRaw = str(formData.get("phone"));
   const city = str(formData.get("city"));
   const state = str(formData.get("state"));
   const remotePreference = str(formData.get("remote_preference"));
   const expectedGraduation = str(formData.get("expected_graduation"));
-  const school = str(formData.get("school"));
+  const partnerIdInput = str(formData.get("partner_id"));
+  const schoolInput = str(formData.get("school"));
   const linkedInUrl = str(formData.get("linkedin_url"));
+  const inviteToken = str(formData.get("invite_token"));
   const technologies = parseTech(formData.get("technologies"));
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Enter a valid email address." };
   }
   if (!firstName) return { ok: false, error: "Enter your first name." };
+  // Phone is optional — validated only when provided.
+  const phoneDigits = normalizePhone(phoneRaw);
+  if (phoneRaw && phoneDigits.length < 7) {
+    return { ok: false, error: "Enter a valid phone number." };
+  }
   if (linkedInUrl && !normalizeLiveUrl(linkedInUrl)) {
     return { ok: false, error: "Enter a valid https:// LinkedIn URL." };
   }
@@ -244,14 +272,58 @@ export async function registerStudent(
 
   const admin = createAdminClient();
 
-  // Already known? Just let them sign in (client sends a magic link). Never
-  // clobber an existing record or its review decision.
-  const { data: existing } = await admin
-    .from("interns")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-  if (existing) return { ok: true };
+  // Resolve the school to a canonical partner when one was picked, so the
+  // candidate is linked by id (not a drifting name string). "Other" / free text
+  // keeps the name with no partner link.
+  let partnerId: string | null = null;
+  let school = schoolInput;
+  if (partnerIdInput) {
+    const { data: partner } = await admin
+      .from("partners")
+      .select("id, name")
+      .eq("id", partnerIdInput)
+      .maybeSingle();
+    if (partner) {
+      partnerId = partner.id as string;
+      school = (partner.name as string) ?? schoolInput;
+    }
+  }
+
+  // ---- DEDUPE: find an existing record by EMAIL (never phone — see above). ----
+  // 1) Supabase first (indexed) — covers anyone already synced or materialized.
+  //    Capture review_status so we don't re-notify for a candidate that's
+  //    already been reviewed, and intern_year so a merge preserves their cohort.
+  let existingAirtableId: string | null = null;
+  let existingReviewStatus: string | null = null;
+  let existingHasInternYear = false;
+  {
+    const { data: match } = await admin
+      .from("interns")
+      .select("airtable_id, review_status, intern_year")
+      .eq("email", email)
+      .limit(1)
+      .maybeSingle();
+    if (match) {
+      existingAirtableId = match.airtable_id as string;
+      existingReviewStatus = (match.review_status as string) ?? null;
+      existingHasInternYear = Boolean(match.intern_year);
+    }
+  }
+  // 2) Not in Supabase? One Airtable query catches records that exist there but
+  //    haven't synced (e.g. added straight in Airtable).
+  if (!existingAirtableId) {
+    try {
+      const found = await findLocalTalentRecord({ email });
+      if (found) {
+        existingAirtableId = found.id;
+        existingHasInternYear = found.internYearSet;
+      }
+    } catch (e) {
+      // Non-fatal: fall through to create. A transient lookup failure should
+      // never block a signup — worst case is a duplicate the next sync surfaces.
+      console.error("[signup:dedupe-lookup]", e);
+    }
+  }
 
   // 1. Upload resume (private) + photo (public). Temp paths keyed by a random
   // id; the next sync re-hosts to `${airtable_id}.*` and converges resume_path.
@@ -300,24 +372,35 @@ export async function registerStudent(
     .from("resumes")
     .createSignedUrl(resumePath, 3600);
 
-  // 3. Create the Airtable record (source of truth) WITH Intern Year set.
+  // 3. Write Airtable (source of truth) — updating the matched record if we
+  // found one, otherwise creating a new one. Intern Year: a new record gets the
+  // current default; a matched record keeps its existing cohort and only gets
+  // the default when it has none (so it still enters sync scope either way —
+  // buildLocalTalentFields skips a null internYear).
+  const airtableRecord = {
+    firstName,
+    lastName,
+    email,
+    phone: phoneRaw,
+    city,
+    state,
+    remotePreference,
+    expectedGraduation,
+    technologies,
+    school,
+    resumeUrl: signed?.signedUrl ?? null,
+    linkedInUrl,
+    profileImageUrl: photoUrl,
+    internYear: existingHasInternYear ? null : defaultInternYear(),
+  };
   let airtableId: string;
   try {
-    airtableId = await createLocalTalentRecord({
-      firstName,
-      lastName,
-      email,
-      city,
-      state,
-      remotePreference,
-      expectedGraduation,
-      technologies,
-      school,
-      resumeUrl: signed?.signedUrl ?? null,
-      linkedInUrl,
-      profileImageUrl: photoUrl,
-      internYear: defaultInternYear(),
-    });
+    if (existingAirtableId) {
+      await updateLocalTalentRecord(existingAirtableId, airtableRecord);
+      airtableId = existingAirtableId;
+    } else {
+      airtableId = await createLocalTalentRecord(airtableRecord);
+    }
   } catch (e) {
     return {
       ok: false,
@@ -329,9 +412,10 @@ export async function registerStudent(
     };
   }
 
-  // 4. Materialize the Supabase row now so the student can edit immediately.
-  // review_status defaults to 'pending'; the next sync enriches Airtable-computed
-  // fields but preserves the review decision (columns not in the sync payload).
+  // 4. Materialize / update the Supabase row on the SAME airtable_id, so the
+  // student can edit immediately and future syncs converge on this one record.
+  // review_status is left to its column default ('pending') on insert and NOT
+  // named here on update, so an existing review decision is preserved.
   const name = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
   const location = [city, state].filter(Boolean).join(", ") || null;
   const { data: internRow, error: upErr } = await admin
@@ -343,6 +427,8 @@ export async function registerStudent(
         first_name: firstName,
         last_name: lastName,
         email,
+        phone: phoneRaw,
+        phone_normalized: phoneDigits,
         city,
         state,
         location,
@@ -350,6 +436,7 @@ export async function registerStudent(
         expected_graduation: expectedGraduation,
         technologies,
         educational_institution: school,
+        partner_id: partnerId,
         linkedin_url: linkedInUrl,
         resume_path: resumePath,
         profile_image_url: photoUrl,
@@ -370,26 +457,54 @@ export async function registerStudent(
     };
   }
 
-  // 5. Insert published project links.
+  // 5. Insert published project links, skipping any URL already saved (so a
+  // re-submission by a returning student doesn't duplicate links).
   if (projectUrls.length) {
-    const rows = projectUrls.map((url, i) => ({
-      intern_id: internRow.id,
-      url,
-      sort_order: i,
-    }));
-    const { error: projErr } = await admin.from("intern_projects").insert(rows);
-    if (projErr) console.error("[signup:projects]", projErr);
+    const { data: existingProjects } = await admin
+      .from("intern_projects")
+      .select("url")
+      .eq("intern_id", internRow.id);
+    const have = new Set((existingProjects ?? []).map((p) => p.url as string));
+    const fresh = projectUrls.filter((url) => !have.has(url));
+    if (fresh.length) {
+      const rows = fresh.map((url, i) => ({
+        intern_id: internRow.id,
+        url,
+        sort_order: have.size + i,
+      }));
+      const { error: projErr } = await admin
+        .from("intern_projects")
+        .insert(rows);
+      if (projErr) console.error("[signup:projects]", projErr);
+    }
   }
 
-  // 6. Best-effort notify David that a new student is waiting for review.
-  const { ok, error } = await sendStudentSignupNotification({
-    name,
-    email,
-    school,
-    reviewUrl: `${siteBase()}/admin/candidates`,
-  });
-  if (!ok && error !== "email-not-configured") {
-    console.error("[signup:notify-student]", error);
+  // 6. Update the referring bootcamp's roster funnel (invite click-through or a
+  // direct-signup match), so staff can track who landed. Best-effort.
+  try {
+    await linkRosterOnSignup({
+      inviteToken,
+      email,
+      airtableId,
+    });
+  } catch (e) {
+    console.error("[signup:roster-link]", e);
+  }
+
+  // 7. Notify David a student is waiting for review — but not when we just
+  // updated a candidate that was already reviewed (approved/denied).
+  const needsReview =
+    existingReviewStatus === null || existingReviewStatus === "pending";
+  if (needsReview) {
+    const { ok, error } = await sendStudentSignupNotification({
+      name,
+      email,
+      school,
+      reviewUrl: `${siteBase()}/admin/candidates`,
+    });
+    if (!ok && error !== "email-not-configured") {
+      console.error("[signup:notify-student]", error);
+    }
   }
 
   return { ok: true };

@@ -3,9 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseRoster, type ParsedRoster } from "@/lib/csv";
-import { addStudents } from "@/app/partners/actions";
+import type { RosterRow } from "@/lib/csv";
+import type { AddStudentsResult } from "@/lib/rosters";
 
-export function RosterUpload() {
+/**
+ * Roster paste/upload UI. The `addStudents` action is injected so the same
+ * component serves both the partner portal (own-org action) and the admin
+ * console (admin action bound to a partnerId).
+ */
+export function RosterUpload({
+  addStudents,
+}: {
+  addStudents: (rows: RosterRow[]) => Promise<AddStudentsResult>;
+}) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState<ParsedRoster | null>(null);

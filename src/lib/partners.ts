@@ -28,6 +28,7 @@ export type PartnerStudent = {
   invited_at: string | null;
   clicked_at: string | null;
   completed_at: string | null;
+  completed_via: "invite" | "direct" | null;
   airtable_id: string | null;
   created_at: string;
   expires_at: string | null;
@@ -69,7 +70,7 @@ export async function getRoster(): Promise<PartnerStudent[]> {
   const { data, error } = await supabase
     .from("partner_students")
     .select(
-      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, airtable_id, created_at"
+      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, completed_via, airtable_id, created_at"
     )
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -114,7 +115,7 @@ export async function getStudentByToken(
   const { data } = await admin
     .from("partner_students")
     .select(
-      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, airtable_id, created_at, expires_at, partners(name)"
+      "id, partner_id, first_name, last_name, email, invite_token, status, invited_at, clicked_at, completed_at, completed_via, airtable_id, created_at, expires_at, partners(name)"
     )
     .eq("invite_token", token)
     .maybeSingle();

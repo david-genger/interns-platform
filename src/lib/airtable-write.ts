@@ -33,6 +33,7 @@ export type NewStudentRecord = {
   firstName: string | null;
   lastName: string | null;
   email: string;
+  phone?: string | null;
   city: string | null;
   state: string | null;
   remotePreference: string | null;
@@ -45,21 +46,19 @@ export type NewStudentRecord = {
   /** Publicly fetchable URL Airtable snapshots into the Profile Image field. */
   profileImageUrl?: string | null;
   /**
-   * Cohort label. Partner invites leave this UNSET so the record stays hidden
-   * until vetted; the self-serve signup sets the current year so the sync
-   * ingests it and the admin review gate takes over.
+   * Cohort label. The unified student intake always sets this to the current
+   * year so the sync ingests the record and the admin review gate takes over.
    */
   internYear?: string | null;
 };
 
 /**
- * Create the Local Talent record. Returns the new Airtable record id.
- * `typecast: true` lets single-select fields (school, remote preference)
- * accept values by label, creating the option if needed.
+ * Build the Airtable `fields` payload from a student record. Shared by create
+ * (POST) and update (PATCH) so both write exactly the same columns — only the
+ * keys with a value are included, so an update never blanks a field the caller
+ * didn't supply.
  */
-export async function createLocalTalentRecord(
-  r: NewStudentRecord
-): Promise<string> {
+function buildLocalTalentFields(r: NewStudentRecord): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
 
   const fullName =
@@ -82,11 +81,27 @@ export async function createLocalTalentRecord(
   if (r.resumeUrl) fields[FIELD.resume] = [{ url: r.resumeUrl }];
   if (r.profileImageUrl) fields[FIELD.profileImage] = [{ url: r.profileImageUrl }];
 
-  if (EMAIL_FIELD) fields[EMAIL_FIELD] = r.email;
+  // Email/phone are stable field IDs on the read side; write via those ids
+  // directly (falling back to the env NAME override only when configured).
+  fields[EMAIL_FIELD ?? FIELD.email] = r.email;
+  if (r.phone) fields[FIELD.phone] = r.phone;
   if (SOURCE_FIELD && r.school) fields[SOURCE_FIELD] = r.school;
   if (TECH_FIELD && r.technologies.length > 0) {
     fields[TECH_FIELD] = r.technologies;
   }
+
+  return fields;
+}
+
+/**
+ * Create the Local Talent record. Returns the new Airtable record id.
+ * `typecast: true` lets single-select fields (school, remote preference)
+ * accept values by label, creating the option if needed.
+ */
+export async function createLocalTalentRecord(
+  r: NewStudentRecord
+): Promise<string> {
+  const fields = buildLocalTalentFields(r);
 
   const res = await fetch(`https://api.airtable.com/v0/${BASE}/${TABLE}`, {
     method: "POST",
@@ -103,4 +118,35 @@ export async function createLocalTalentRecord(
   }
   const data = (await res.json()) as { id: string };
   return data.id;
+}
+
+/**
+ * Update an existing Local Talent record from a fresh signup submission — the
+ * dedupe path when a student already has a record (matched by email). Only
+ * supplied fields are written; the caller passes `internYear` only when the
+ * record doesn't already have one (never moving an existing candidate's cohort),
+ * which still guarantees the record enters sync scope either way.
+ */
+export async function updateLocalTalentRecord(
+  airtableId: string,
+  r: NewStudentRecord
+): Promise<void> {
+  const fields = buildLocalTalentFields(r);
+  if (Object.keys(fields).length === 0) return;
+
+  const res = await fetch(
+    `https://api.airtable.com/v0/${BASE}/${TABLE}/${airtableId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ fields, typecast: true }),
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Airtable write ${res.status}: ${await res.text()}`);
+  }
 }

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PartnerStudent, StudentStatus } from "@/lib/partners";
-import { resendInvite } from "@/app/partners/actions";
 
 const STATUS_STYLE: Record<StudentStatus, { label: string; cls: string }> = {
   uploaded: { label: "Not invited", cls: "bg-slate-100 text-slate-600" },
@@ -12,7 +11,19 @@ const STATUS_STYLE: Record<StudentStatus, { label: string; cls: string }> = {
   completed: { label: "Completed", cls: "bg-emerald-100 text-emerald-700" },
 };
 
-export function RosterTable({ roster }: { roster: PartnerStudent[] }) {
+type ResendAction = (studentId: string) => Promise<{ ok: boolean; error?: string }>;
+
+/**
+ * Roster funnel table. `resendInvite` is injected so the partner portal and
+ * admin console share the same table.
+ */
+export function RosterTable({
+  roster,
+  resendInvite,
+}: {
+  roster: PartnerStudent[];
+  resendInvite: ResendAction;
+}) {
   if (roster.length === 0) {
     return (
       <div className="px-6 py-12 text-center text-sm text-slate-400">
@@ -34,7 +45,7 @@ export function RosterTable({ roster }: { roster: PartnerStudent[] }) {
         </thead>
         <tbody>
           {roster.map((s) => (
-            <Row key={s.id} student={s} />
+            <Row key={s.id} student={s} resendInvite={resendInvite} />
           ))}
         </tbody>
       </table>
@@ -42,7 +53,13 @@ export function RosterTable({ roster }: { roster: PartnerStudent[] }) {
   );
 }
 
-function Row({ student }: { student: PartnerStudent }) {
+function Row({
+  student,
+  resendInvite,
+}: {
+  student: PartnerStudent;
+  resendInvite: ResendAction;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);

@@ -3,6 +3,7 @@ import { RosterUpload } from "@/components/partners/RosterUpload";
 import { RosterTable } from "@/components/partners/RosterTable";
 import { StatCards } from "@/components/partners/StatCards";
 import { SendInvitesButton } from "@/components/partners/SendInvitesButton";
+import { addStudents, sendInvites, resendInvite } from "@/app/partners/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function PartnerDashboardPage() {
           </p>
         </div>
         {pendingInvites > 0 && (
-          <SendInvitesButton count={pendingInvites} />
+          <SendInvitesButton count={pendingInvites} sendInvites={sendInvites} />
         )}
       </div>
 
@@ -37,7 +38,7 @@ export default async function PartnerDashboardPage() {
           added.
         </p>
         <div className="mt-4">
-          <RosterUpload />
+          <RosterUpload addStudents={addStudents} />
         </div>
       </section>
 
@@ -50,7 +51,7 @@ export default async function PartnerDashboardPage() {
             </span>
           </h2>
         </div>
-        <RosterTable roster={roster} />
+        <RosterTable roster={roster} resendInvite={resendInvite} />
       </section>
     </div>
   );

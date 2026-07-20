@@ -2,10 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { sendInvites } from "@/app/partners/actions";
+import type { SendInvitesResult } from "@/lib/rosters";
 
-/** Sends invites to everyone on the roster who hasn't been invited yet. */
-export function SendInvitesButton({ count }: { count: number }) {
+/**
+ * Sends invites to everyone on the roster who hasn't been invited yet. The
+ * `sendInvites` action is injected so the partner portal and admin console can
+ * both reuse this button.
+ */
+export function SendInvitesButton({
+  count,
+  sendInvites,
+}: {
+  count: number;
+  sendInvites: () => Promise<SendInvitesResult>;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);

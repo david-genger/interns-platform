@@ -10,9 +10,17 @@
  * request the columns we map (`fields[]` + returnFieldsByFieldId).
  */
 
+import { normalizePhone } from "@/lib/phone";
+
 const BASE = process.env.AIRTABLE_BASE_ID!;
 const TABLE = process.env.AIRTABLE_TABLE_ID!;
 const TOKEN = process.env.AIRTABLE_TOKEN!;
+
+// filterByFormula references fields by NAME (not ID), so the dedupe query needs
+// the human names of the email / phone columns. Defaults match the standard
+// Local Talent columns; override via env if the base renames them.
+const EMAIL_FIELD_NAME = process.env.AIRTABLE_EMAIL_FIELD_NAME ?? "Email";
+const PHONE_FIELD_NAME = process.env.AIRTABLE_PHONE_FIELD_NAME ?? "Phone";
 // Separate PAT, scoped to data.records:write on this base only. Kept distinct
 // from the read-only sync TOKEN so the write path is the ONLY thing that can
 // mutate Airtable — currently just the student resume field.
@@ -101,6 +109,7 @@ export function mapRecord(rec: AirtableRecord) {
       remote_preference: str(f[FIELD.remotePreference]),
       email: str(f[FIELD.email]),
       phone: str(f[FIELD.phone]),
+      phone_normalized: normalizePhone(str(f[FIELD.phone])),
       linkedin_url: str(f[FIELD.linkedin]),
       airtable_modified_at: str(f[FIELD.lastModified]),
     },
@@ -179,6 +188,7 @@ export type InternFieldUpdate = {
   name?: string | null;
   firstName?: string | null;
   lastName?: string | null;
+  phone?: string | null;
   headline?: string | null;
   city?: string | null;
   state?: string | null;
@@ -209,6 +219,7 @@ export async function updateInternFields(
   if (u.name !== undefined) fields[FIELD.name] = u.name;
   if (u.firstName !== undefined) fields[FIELD.firstName] = u.firstName;
   if (u.lastName !== undefined) fields[FIELD.lastName] = u.lastName;
+  if (u.phone !== undefined) fields[FIELD.phone] = u.phone;
   if (u.headline !== undefined) fields[FIELD.jobTitle] = u.headline;
   if (u.city !== undefined) fields[FIELD.city] = u.city;
   if (u.state !== undefined) fields[FIELD.state] = u.state;
@@ -263,6 +274,60 @@ export async function fetchInternById(
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
   return (await res.json()) as AirtableRecord;
+}
+
+/**
+ * Find an existing Local Talent record matching a signup by email OR phone, so
+ * the intake path can UPDATE it instead of creating a duplicate. One filtered
+ * query (server-side `filterByFormula`, capped to a single page), so per-signup
+ * cost is constant regardless of base size — this scales.
+ *
+ * Phone is compared digits-only on BOTH sides (Airtable's REGEX_REPLACE strips
+ * the stored value; the caller passes an already-normalized key), so formatting
+ * differences never cause a miss. Empty inputs are skipped, so a blank phone can
+ * never match another blank phone. Returns the record id + whether Intern Year
+ * is already set (the caller ensures it becomes set on update).
+ */
+export async function findLocalTalentRecord(opts: {
+  email?: string | null;
+  phoneDigits?: string | null;
+}): Promise<{ id: string; internYearSet: boolean } | null> {
+  const email = opts.email?.trim().toLowerCase() || "";
+  const phone = (opts.phoneDigits ?? "").replace(/\D/g, "");
+
+  const clauses: string[] = [];
+  // Email is validated upstream (no quotes possible); phone is digits-only.
+  // Both are injection-safe, but we still hard-strip to be certain.
+  if (email) {
+    clauses.push(
+      `LOWER({${EMAIL_FIELD_NAME}} & '') = '${email.replace(/'/g, "")}'`
+    );
+  }
+  if (phone) {
+    clauses.push(
+      `REGEX_REPLACE({${PHONE_FIELD_NAME}} & '', '[^0-9]', '') = '${phone}'`
+    );
+  }
+  if (clauses.length === 0) return null;
+  const formula = clauses.length === 1 ? clauses[0] : `OR(${clauses.join(",")})`;
+
+  const url = new URL(`https://api.airtable.com/v0/${BASE}/${TABLE}`);
+  url.searchParams.set("filterByFormula", formula);
+  url.searchParams.set("pageSize", "1");
+  url.searchParams.set("returnFieldsByFieldId", "true");
+  url.searchParams.append("fields[]", FIELD.internYear);
+  url.searchParams.append("fields[]", FIELD.email);
+  url.searchParams.append("fields[]", FIELD.phone);
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Airtable ${res.status}: ${await res.text()}`);
+  const data = (await res.json()) as { records: AirtableRecord[] };
+  const rec = data.records[0];
+  if (!rec) return null;
+  return { id: rec.id, internYearSet: Boolean(str(rec.fields[FIELD.internYear])) };
 }
 
 /**

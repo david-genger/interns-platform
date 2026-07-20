@@ -1,6 +1,6 @@
 import { getStudentByToken } from "@/lib/partners";
 import { markInviteClicked } from "../actions";
-import { InviteForm } from "@/components/partners/InviteForm";
+import { SignupForm } from "@/components/student/SignupForm";
 import { DevxLogo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
@@ -70,11 +70,16 @@ export default async function InvitePage({
             )}
           </p>
           <div className="mt-6">
-            <InviteForm
-              token={params.token}
+            <SignupForm
+              mode="invite"
               email={student.email}
-              firstName={student.first_name}
-              lastName={student.last_name}
+              token={params.token}
+              defaultFirstName={student.first_name}
+              defaultLastName={student.last_name}
+              lockedSchool={{
+                partnerId: student.partner_id,
+                name: student.partner_name ?? "",
+              }}
             />
           </div>
         </div>

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getMyIntern } from "@/lib/interns";
 import { updateInternFields } from "@/lib/airtable";
 import { normalizeLiveUrl } from "@/lib/url";
+import { normalizePhone } from "@/lib/phone";
 
 export type ActionResult = { ok: boolean; error?: string; warning?: string };
 
@@ -24,6 +25,9 @@ export async function updateProfile(formData: FormData): Promise<ActionResult> {
   const intern = await getMyIntern();
   if (!intern) return { ok: false, error: "Not authorized." };
 
+  const firstName = str(formData.get("first_name"));
+  const lastName = str(formData.get("last_name"));
+  const phoneRaw = str(formData.get("phone"));
   const headline = str(formData.get("headline"));
   const city = str(formData.get("city"));
   const state = str(formData.get("state"));
@@ -31,16 +35,31 @@ export async function updateProfile(formData: FormData): Promise<ActionResult> {
   const linkedInUrl = str(formData.get("linkedin_url"));
   const technologies = parseTech(formData.get("technologies"));
 
+  if (!firstName) return { ok: false, error: "Enter your first name." };
+  // Phone is optional — validated only when provided.
+  const phoneDigits = normalizePhone(phoneRaw);
+  if (phoneRaw && phoneDigits.length < 7) {
+    return { ok: false, error: "Enter a valid phone number." };
+  }
   if (linkedInUrl && !normalizeLiveUrl(linkedInUrl)) {
     return { ok: false, error: "Enter a valid https:// LinkedIn URL." };
   }
 
+  // NOTE: school and expected graduation are deliberately NOT editable here —
+  // they anchor the candidate to a cohort/partner and are managed upstream. We
+  // ignore them even if a crafted post includes them (server-side enforcement).
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
   const location = [city, state].filter(Boolean).join(", ") || null;
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("interns")
     .update({
+      name,
+      first_name: firstName,
+      last_name: lastName,
+      phone: phoneRaw,
+      phone_normalized: phoneDigits,
       headline,
       city,
       state,
@@ -55,6 +74,10 @@ export async function updateProfile(formData: FormData): Promise<ActionResult> {
   let warning: string | undefined;
   try {
     await updateInternFields(intern.airtable_id, {
+      name,
+      firstName,
+      lastName,
+      phone: phoneRaw,
       headline,
       city,
       state,

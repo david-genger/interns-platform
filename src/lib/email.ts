@@ -452,14 +452,18 @@ function greeting(firstName: string | null): string {
 }
 
 function inviteText(e: InviteEmail): string {
-  const from = e.partnerName ? `${e.partnerName} and Devx Staffing` : "Devx Staffing";
+  const opener = e.partnerName
+    ? `${e.partnerName} shared your info with us here at Devx Staffing.`
+    : "You've been referred to us here at Devx Staffing.";
   return [
     greeting(e.firstName),
     "",
-    `${from} would like to add your profile to the Devx talent platform, where vetted companies browse for interns and junior developers.`,
+    `${opener} We are a recruiting firm focused specifically on tech, and we partner with bootcamps to help grads land their first real dev roles.`,
     "",
-    "It takes about 5 minutes — upload your resume and add a few details:",
+    "Part of what we offer is the Devx talent platform: it's where vetted companies come specifically to hire interns and junior developers, so it's built for exactly where you're at right now. Getting listed takes about 5 minutes — upload your resume, add a couple details, and you're in front of hiring teams.",
     e.link,
+    "",
+    "Excited to have you on there!",
     "",
     "This link is unique to you. If you weren't expecting this, you can ignore it.",
     "",
@@ -468,9 +472,9 @@ function inviteText(e: InviteEmail): string {
 }
 
 function inviteHtml(e: InviteEmail): string {
-  const from = e.partnerName
-    ? `${escapeHtml(e.partnerName)} and Devx Staffing`
-    : "Devx Staffing";
+  const opener = e.partnerName
+    ? `${escapeHtml(e.partnerName)} shared your info with us here at Devx Staffing.`
+    : "You've been referred to us here at Devx Staffing.";
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
@@ -483,16 +487,22 @@ function inviteHtml(e: InviteEmail): string {
               e.firstName
             )}</p>
             <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">
-              ${from} would like to add your profile to the <strong>Devx talent platform</strong>,
-              where vetted companies browse for interns and junior developers.
+              ${opener} We are a recruiting firm focused specifically on tech, and we
+              partner with bootcamps to help grads land their first real dev roles.
             </p>
             <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">
-              It takes about 5 minutes — just upload your resume and add a few details.
+              Part of what we offer is the <strong>Devx talent platform</strong>: it's where
+              vetted companies come specifically to hire interns and junior developers, so it's
+              built for exactly where you're at right now. Getting listed takes about 5 minutes —
+              upload your resume, add a couple details, and you're in front of hiring teams.
             </p>
             <a href="${escapeHtml(e.link)}"
                style="display:inline-block;background:linear-gradient(90deg,#1C75BC 0%,#4A4FD6 50%,#6637ED 100%);color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:10px;">
               Set up my profile
             </a>
+            <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">
+              Excited to have you on there!
+            </p>
             <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">
               This link is unique to you. If you weren't expecting this, you can ignore this email.
             </p>

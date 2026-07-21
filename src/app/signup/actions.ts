@@ -215,7 +215,11 @@ export async function registerStudent(
   const city = str(formData.get("city"));
   const state = str(formData.get("state"));
   const remotePreference = str(formData.get("remote_preference"));
-  const expectedGraduation = str(formData.get("expected_graduation"));
+  // The form's graduation field is <input type="month"> → "YYYY-MM". Postgres'
+  // `date` column rejects a day-less value, so normalize to the first of the
+  // month. Airtable tolerates the raw value (typecast) but we keep both sides
+  // consistent by writing the same ISO date everywhere.
+  const expectedGraduation = toIsoDate(str(formData.get("expected_graduation")));
   const school = str(formData.get("school"));
   const linkedInUrl = str(formData.get("linkedin_url"));
   const inviteToken = str(formData.get("invite_token"));
@@ -515,6 +519,19 @@ function str(v: FormDataEntryValue | null): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t.length ? t : null;
+}
+
+/**
+ * Coerce a graduation value into a Postgres-safe ISO date (YYYY-MM-DD).
+ * The form sends a month ("YYYY-MM") which Postgres' `date` type rejects, so we
+ * pin it to the first of the month. A full date passes through; anything else
+ * (unexpected format) becomes null rather than blowing up the DB insert.
+ */
+function toIsoDate(v: string | null): string | null {
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  if (/^\d{4}-\d{2}$/.test(v)) return `${v}-01`;
+  return null;
 }
 
 function parseTech(v: FormDataEntryValue | null): string[] {

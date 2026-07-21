@@ -63,9 +63,10 @@ function buildLocalTalentFields(r: NewStudentRecord): Record<string, unknown> {
 
   const fullName =
     [r.firstName, r.lastName].filter(Boolean).join(" ").trim() || null;
+  // Only "Name" is writable — "First name"/"Last name" are FORMULA fields in
+  // Airtable that split this value (LEFT/RIGHT of the first space). Writing to a
+  // computed field 422s the whole POST, so we set Name and let them derive.
   if (fullName) fields[FIELD.name] = fullName;
-  if (r.firstName) fields[FIELD.firstName] = r.firstName;
-  if (r.lastName) fields[FIELD.lastName] = r.lastName;
   if (r.city) fields[FIELD.city] = r.city;
   if (r.state) fields[FIELD.state] = r.state;
 

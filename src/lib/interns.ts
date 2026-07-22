@@ -66,17 +66,23 @@ export async function getFacets() {
 }
 
 /**
- * The signed-in viewer's email, lowercased — used to tag analytics events so
- * candidate views can be filtered by which company user opened the profile.
- * Returns null when there's no session (shouldn't happen behind the /interns
- * gate, but the tag is simply omitted rather than guessed).
+ * The signed-in viewer's email, lowercased — used only to TAG analytics events
+ * so candidate views can be filtered by which company user opened the profile.
+ *
+ * Deliberately uses `getSession()` (a local read of the auth cookie) rather than
+ * `getUser()` (a network round-trip to the Supabase Auth server). This is a
+ * display label, not an access decision — the middleware already verified the
+ * session for the /interns gate, and RLS scopes every data read — so paying for
+ * a second token verification here would be wasteful, especially since the
+ * slideout is a prefetched route (this runs on every card the list prefetches,
+ * not just the ones actually opened). Returns null when there's no session.
  */
 export async function getViewerEmail(): Promise<string | null> {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.email?.toLowerCase() ?? null;
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user?.email?.toLowerCase() ?? null;
 }
 
 /**

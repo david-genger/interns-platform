@@ -66,6 +66,20 @@ export async function getFacets() {
 }
 
 /**
+ * The signed-in viewer's email, lowercased — used to tag analytics events so
+ * candidate views can be filtered by which company user opened the profile.
+ * Returns null when there's no session (shouldn't happen behind the /interns
+ * gate, but the tag is simply omitted rather than guessed).
+ */
+export async function getViewerEmail(): Promise<string | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.email?.toLowerCase() ?? null;
+}
+
+/**
  * Resolve the logged-in student's OWN intern record by email match. RLS's
  * "student reads own row" policy limits this to their single row. Returns null
  * if the signed-in email doesn't match any intern (e.g. a company user, or a

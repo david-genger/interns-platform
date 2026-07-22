@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getResumeSignedUrl } from "@/lib/interns";
+import { getResumeSignedUrl, getViewerEmail } from "@/lib/interns";
 import { trackServer } from "@/lib/analytics";
 import { EVENTS } from "@/lib/analytics-events";
 
@@ -12,6 +12,7 @@ export async function GET(
 ) {
   const url = await getResumeSignedUrl(params.id);
   if (!url) return new NextResponse("Not found", { status: 404 });
-  await trackServer(EVENTS.resumeDownloaded, { intern_id: params.id });
+  const viewer = await getViewerEmail();
+  await trackServer(EVENTS.resumeDownloaded, { intern_id: params.id, viewer });
   return NextResponse.redirect(url);
 }

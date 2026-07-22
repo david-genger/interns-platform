@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { InternProfile } from "@/components/InternProfile";
-import { getIntern, getProjects } from "@/lib/interns";
-import { trackServer } from "@/lib/analytics";
+import { TrackView } from "@/components/TrackView";
+import { getIntern, getProjects, getViewerEmail } from "@/lib/interns";
 import { EVENTS } from "@/lib/analytics-events";
 
 // Full-page profile: direct load / refresh / shared link of /interns/[id].
@@ -13,12 +13,17 @@ export default async function InternPage({
 }) {
   const intern = await getIntern(params.id);
   if (!intern) notFound();
-  const projects = await getProjects(intern.id);
-
-  await trackServer(EVENTS.internViewed, { intern_id: intern.id, source: "page" });
+  const [projects, viewer] = await Promise.all([
+    getProjects(intern.id),
+    getViewerEmail(),
+  ]);
 
   return (
     <div className="mx-auto max-w-2xl">
+      <TrackView
+        event={EVENTS.internViewed}
+        props={{ intern_id: intern.id, viewer }}
+      />
       <Link
         href="/interns"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800"
